@@ -52,7 +52,12 @@ export function getSupabase(): TonightSupabaseClient | null {
         storage: ExpoSecureStoreAdapter,
         autoRefreshToken: true,
         persistSession: true,
+        // Native: we parse the email-confirmation deep link ourselves (see
+        // AuthProvider) rather than relying on browser URL detection.
         detectSessionInUrl: false,
+        // PKCE → the confirmation redirect carries a `?code=` query param we can
+        // parse with expo-linking and exchange for a session on-device.
+        flowType: 'pkce',
       },
     });
   }

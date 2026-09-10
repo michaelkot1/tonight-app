@@ -1,6 +1,6 @@
 # TASKS.md — Tonight
 
-Active milestone: **Phase 1 — Data model & backend**
+Active milestone: **Phase 2 — Auth & onboarding** (client foundation complete on `cursor/phase-2-auth-onboarding`; Apple/Google OAuth deferred pending credentials)
 
 Work on feature branches (`cursor/...`), never directly on `main`. Companion docs: `plan.md`, `spec.md`, `design.md`.
 
@@ -27,19 +27,32 @@ Work on feature branches (`cursor/...`), never directly on `main`. Companion doc
 - [x] Generated TypeScript types → `src/lib/database.types.ts`, wired into typed client (`SupabaseClient<Database>`)
 - [ ] Owner: seed/verify TMDB provider ids in `service_catalog` during ingestion phase
 
-## Phase 2 — Auth & onboarding (stub)
+## Phase 2 — Auth & onboarding
 
-- [ ] Apple / Google OAuth via Supabase
-- [ ] Profile + streaming services
+- [x] `AuthProvider` + session persistence (SecureStore) + email/password sign-in/up
+- [x] Route groups `(auth)` / `(onboarding)` / `(tabs)` + 3-way redirect guard (`onboarded_at`)
+- [x] Reusable token-driven components: Button, TextInput, Chip, ServiceGrid, OnboardingScaffold
+- [x] Onboarding flow (ordered): services (required) → taste-seed (placeholder/skip) → @handle (required + availability) → watch-with → invite (share link) → notifications (value-framed, no OS prompt) → stamp `onboarded_at` → Home
+- [x] Persist to `profiles` / `user_services`; handle format `{3,20}[a-z0-9_]` + `is_handle_available`
+- [x] Profile: Sign out + Delete account (`delete-account` Edge Function → signOut)
+- [x] Env placeholders for future Google client IDs (optional)
+- [ ] **Deferred (owner):** Apple + Google OAuth wiring (credentials + likely dev client)
+- [ ] **Deferred (owner):** `expo-notifications` OS permission ask
+- [ ] **Deferred (owner):** `expo-contacts` match; real per-user invite codes (Phase 4)
+- [ ] **Deferred:** real TMDB taste-seed ratings (Phase 3)
+- [ ] Owner: smoke-test email auth + onboarding end-to-end in Expo Go
+- [ ] Owner: provide Apple/Google OAuth credentials when ready to wire
 
 ## Phase 3 — Home & title surfaces (stub)
 
 - [ ] Home rails / Tonight's pick
 - [ ] Title detail + ratings
+- [ ] Taste-seed onboarding with real TMDB titles (from Phase 2 deferral)
 
 ## Phase 4 — Friends & invites (stub)
 
 - [ ] Invites, follows, social graph
+- [ ] Real per-user invite codes + contacts match (from Phase 2 deferral)
 
 ## Phase 5 — Decider (stub)
 
@@ -48,4 +61,5 @@ Work on feature branches (`cursor/...`), never directly on `main`. Companion doc
 ## Phase 6 — Polish & release (stub)
 
 - [ ] Ambient polish (R3F vs Skia decision)
+- [ ] Notifications triggers + OS permission (from Phase 2 deferral)
 - [ ] EAS / TestFlight

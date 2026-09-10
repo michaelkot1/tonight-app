@@ -8,6 +8,13 @@
 export interface PublicEnv {
   supabaseUrl: string | undefined;
   supabaseAnonKey: string | undefined;
+  /**
+   * OAuth (deferred — Phase 2 defers native Apple/Google sign-in wiring).
+   * Optional/nullable: NEVER require these. They exist so Google Sign-In can
+   * drop in later without a schema/config hunt. Do not add secrets here.
+   */
+  googleIosClientId: string | undefined;
+  googleWebClientId: string | undefined;
 }
 
 export interface ServerEnvNames {
@@ -32,6 +39,9 @@ function trimEnv(value: string | undefined): string | undefined {
 export const env: PublicEnv = {
   supabaseUrl: trimEnv(process.env.EXPO_PUBLIC_SUPABASE_URL),
   supabaseAnonKey: trimEnv(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),
+  // Deferred OAuth — optional, safe to be undefined.
+  googleIosClientId: trimEnv(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID),
+  googleWebClientId: trimEnv(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID),
 };
 
 export function hasSupabaseEnv(): boolean {
