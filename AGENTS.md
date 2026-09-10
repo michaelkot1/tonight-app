@@ -56,6 +56,44 @@ When working on tasks you can use Claude Opus 4.8 and:
 6. When working with Expo use skills inside `.agents/skills/`.
 7. Ambient 3D / R3F is **deferred** — see `docs/React_Three_Fiber_Rules.DEFERRED.md` and Phase 6 in `plan.md` (evaluate R3F vs Skia/gradients then). Do not load R3F for routine UI work.
 
+## Plan and Issue Tracking
+
+### plan.md
+`plan.md` is the source of truth for project progress.
+
+- Before starting work, read `plan.md` to understand the current milestone.
+- Work on the current incomplete milestone before moving to later milestones.
+- When a milestone is fully completed and verified, mark it as complete in `plan.md`.
+- Do not mark a milestone complete if it only partially works.
+- If an issue blocks progress, document it in `issues.md`.
+
+### issues.md
+`issues.md` is the source of truth for development issues and attempted solutions.
+
+Whenever you encounter an error, unexpected behavior, blocker, or failed implementation:
+
+1. Check `issues.md` for the same or similar issue.
+2. Record the issue before attempting fixes.
+3. Record each solution attempt and whether it worked or failed.
+4. Do not repeat a solution that has already failed unless there is a specific reason to try it again.
+5. If a solution fails, explain why it failed when possible.
+6. If a solution works, record the successful solution and update `plan.md` if the related milestone is now complete.
+7. Keep issue entries concise and focused on useful information for future agents.
+
+### Issue Entry Format
+
+Each issue should contain:
+
+- Location: where the issue occurs
+- Problem: what is happening
+- Suspected cause: why the agent thinks it is happening
+- Attempts: every solution that has been tried
+- Result: whether the attempt succeeded or failed
+- Current status: unresolved, resolved, or blocked
+- Next step: what should be tried next
+
+Before attempting a fix, always review previous attempts in `issues.md` to avoid repeating failed approaches.
+
 ## Project structure
 
 - Follow `.agents/skills/expo-project-structure` — routes in `src/app/`, screens in `src/screens/`, theme in `src/theme/`.
