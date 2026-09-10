@@ -99,6 +99,7 @@ export type Database = {
           display_name: string | null
           handle: string | null
           id: string
+          onboarded_at: string | null
           updated_at: string
           watch_with: string | null
         }
@@ -108,6 +109,7 @@ export type Database = {
           display_name?: string | null
           handle?: string | null
           id: string
+          onboarded_at?: string | null
           updated_at?: string
           watch_with?: string | null
         }
@@ -117,6 +119,7 @@ export type Database = {
           display_name?: string | null
           handle?: string | null
           id?: string
+          onboarded_at?: string | null
           updated_at?: string
           watch_with?: string | null
         }
@@ -287,6 +290,7 @@ export type Database = {
     Functions: {
       accept_invite: { Args: { invite_code: string }; Returns: string }
       is_following: { Args: { target_id: string }; Returns: boolean }
+      is_handle_available: { Args: { candidate: string }; Returns: boolean }
     }
     Enums: {
       media_type: "movie" | "tv"

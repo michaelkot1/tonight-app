@@ -1,7 +1,7 @@
 # PLAN.md — Tonight (phased build plan)
 
 > Working proposal from the orchestrator. Companion docs: [`spec.md`](spec.md), [`design.md`](design.md), [`AGENTS.md`](AGENTS.md).
-> Status: **Phase 1 data model & backend complete on `cursor/phase-1-data-model` (schema migrated, RLS verified, advisors clean, types generated & wired). Phase 0 foundations done.**
+> Status: **Phase 2 auth & onboarding client foundation complete on `cursor/phase-2-auth-onboarding` (email auth, route guard, full onboarding UI + persistence, profile sign-out/delete). Apple/Google OAuth + notifications OS prompt + contacts deferred by owner until credentials/dev client. Phase 1 backend + Phase 0 foundations done.**
 
 This plan is intentionally phased and top-down. Each phase produces reviewable, mergeable work on a feature branch (never `main`). Exploration → `scout`, implementation → `implementer`, review → orchestrator (main agent).
 
@@ -89,6 +89,10 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 - Profile screen: Sign out + Delete account (full remote deletion — App Store requirement).
 
 **Exit:** New user completes onboarding end-to-end; data persisted; delete-account wipes remote data.
+
+**Status (2026-09-10):** ✅ **Client foundation done** on `cursor/phase-2-auth-onboarding` (uncommitted pending owner smoke-test / merge). Owner locked: email-first auth; defer notifications OS prompt + contacts; taste-seed = skip placeholder until Phase 3.
+- Done: `AuthProvider` + SecureStore session; email sign-in/up; `(auth)`/`(onboarding)`/`(tabs)` groups + `onboarded_at` guard; token-driven Button/TextInput/Chip/ServiceGrid/OnboardingScaffold; full 6-step onboarding UI; persist to `profiles`/`user_services`; Profile Sign out + Delete via deployed `delete-account` Edge Function; `tsc` + `expo lint` + `expo export --platform ios` clean.
+- Deferred: Apple/Google OAuth (needs credentials + likely dev client); `expo-notifications` OS ask; `expo-contacts`; real TMDB taste-seed (Phase 3); real per-user invite codes (Phase 4).
 
 ## Phase 3 — Titles, rating gesture & Home
 
