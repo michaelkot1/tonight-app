@@ -1,6 +1,6 @@
 # TASKS.md — Tonight
 
-Active milestone: **Phase 2 — Auth & onboarding** (client foundation complete on `cursor/phase-2-auth-onboarding`; Apple/Google OAuth deferred pending credentials)
+Active milestone: **Phase 3 — Titles, rating gesture & Home** on `cursor/phase-3-titles-home` (base: `cursor/phase-2-auth-onboarding`)
 
 Work on feature branches (`cursor/...`), never directly on `main`. Companion docs: `plan.md`, `spec.md`, `design.md`.
 
@@ -43,11 +43,24 @@ Work on feature branches (`cursor/...`), never directly on `main`. Companion doc
 - [ ] Owner: smoke-test email auth + onboarding end-to-end in Expo Go
 - [ ] Owner: provide Apple/Google OAuth credentials when ready to wire
 
-## Phase 3 — Home & title surfaces (stub)
+## Phase 3 — Titles, rating gesture & Home
 
-- [ ] Home rails / Tonight's pick
-- [ ] Title detail + ratings
-- [ ] Taste-seed onboarding with real TMDB titles (from Phase 2 deferral)
+### Wave 1 — ingest + data layer + primitives
+- [x] Edge Function `tmdb-search` (auth JWT): proxy TMDB multi-search, upsert lightweight `titles`, return UUID + poster fields
+- [x] Edge Function `tmdb-title` (auth JWT): ensure/enrich one title (details + US providers + OMDb IMDb/RT), upsert full cache row
+- [x] Typed JSON helpers for `genres` / `providers` / `top_cast` / `keywords`
+- [x] Hooks: `useTitleSearch`, `useTitle`, `useRateTitle`, `useMyRatings` (TanStack Query; mirror `use-profile` patterns)
+- [x] `RatingGesture` / verdict control (Loved / Liked / Meh) using theme tokens + `verdict` enum
+- [x] `PosterCard` + `PosterRail` (160×240, r16) and `HeroCard` (Tonight’s pick, 362×452, r24) per `design.md`
+
+### Wave 2 — screens + Home + taste-seed
+- [x] Edge Function `tmdb-popular` (auth JWT): TMDB trending (movie + tv), upsert lightweight `titles`; hook `usePopularTitles`
+- [x] Search screen pushed from Home header (debounced query → open detail); hidden `(tabs)/search` route
+- [x] Title detail route (`title/[id]`, hidden tab) with metadata, IMDb/RT/TMDB scores, US providers, rating control
+- [x] Home: For You + search affordance + Tonight’s pick hero + Popular / Your ratings / More to explore rails (interim pick heuristic)
+- [x] Onboarding taste-seed: real TMDB popular titles + rating gesture (replace Phase 2 placeholder)
+- [x] Verify: `tsc`, `expo lint`, `expo export --platform ios` clean; Edge Functions deployed via Supabase MCP
+- [ ] **Owner (secrets):** set Supabase Edge Function secrets `TMDB_READ_ACCESS_TOKEN` (or `TMDB_API_KEY`) + `OMDB_API_KEY` so `tmdb-*` return live data
 
 ## Phase 4 — Friends & invites (stub)
 

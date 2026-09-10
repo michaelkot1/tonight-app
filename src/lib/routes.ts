@@ -14,6 +14,10 @@ export const asHref = (path: string): Href => path as Href;
 export const routes = {
   auth: asHref('/(auth)'),
   tabs: asHref('/(tabs)'),
+  /** Search screen, pushed from the Home header (hidden tab). */
+  search: asHref('/(tabs)/search'),
+  /** Title detail screen (hidden tab). */
+  title: (id: string): Href => asHref(`/(tabs)/title/${id}`),
   onboarding: {
     services: asHref('/(onboarding)/services'),
     tasteSeed: asHref('/(onboarding)/taste-seed'),

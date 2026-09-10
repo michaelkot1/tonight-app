@@ -46,6 +46,9 @@ export default function TabsLayout() {
           ),
         }}
       />
+      {/* Hidden from the tab bar — reached via Home header / poster taps. */}
+      <Tabs.Screen name="search" options={{ href: null }} />
+      <Tabs.Screen name="title/[id]" options={{ href: null }} />
     </Tabs>
   );
 }

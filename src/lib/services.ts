@@ -22,3 +22,49 @@ export const SERVICE_CATALOG: ServiceCatalogEntry[] = [
   { service: 'peacock', displayName: 'Peacock' },
   { service: 'paramount_plus', displayName: 'Paramount+' },
 ];
+
+/** Human display name for a service enum value. */
+const SERVICE_DISPLAY_NAMES = new Map<StreamingService, string>(
+  SERVICE_CATALOG.map(({ service, displayName }) => [service, displayName]),
+);
+
+export function serviceDisplayName(service: StreamingService): string {
+  return SERVICE_DISPLAY_NAMES.get(service) ?? service;
+}
+
+/**
+ * Lowercase substrings that identify each service inside a TMDB `provider_name`.
+ * TMDB names drift (e.g. "Amazon Prime Video", "Apple TV Plus", "Disney Plus"),
+ * so we match on stable keywords rather than exact strings. This lets us map a
+ * title's parsed providers back to the user's selected `StreamingService`s
+ * without seeding TMDB provider ids into the catalog yet.
+ */
+const SERVICE_PROVIDER_KEYWORDS: Record<StreamingService, string[]> = {
+  netflix: ['netflix'],
+  max: ['max', 'hbo'],
+  disney_plus: ['disney'],
+  prime_video: ['amazon prime video', 'prime video'],
+  hulu: ['hulu'],
+  apple_tv_plus: ['apple tv+', 'apple tv plus'],
+  peacock: ['peacock'],
+  paramount_plus: ['paramount+', 'paramount plus'],
+};
+
+/** True when a TMDB provider name matches the given service by keyword. */
+export function providerNameMatchesService(
+  providerName: string,
+  service: StreamingService,
+): boolean {
+  const name = providerName.toLowerCase();
+  return SERVICE_PROVIDER_KEYWORDS[service].some((keyword) => name.includes(keyword));
+}
+
+/** The user's selected services that a set of provider names covers. */
+export function matchServices(
+  providerNames: string[],
+  selected: StreamingService[],
+): StreamingService[] {
+  return selected.filter((service) =>
+    providerNames.some((name) => providerNameMatchesService(name, service)),
+  );
+}
