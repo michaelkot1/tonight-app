@@ -13,11 +13,13 @@ export interface PublicEnv {
 export interface ServerEnvNames {
   /** Server-only — do not expose via EXPO_PUBLIC_ */
   tmdbApiKey: 'TMDB_API_KEY';
+  tmdbReadAccessToken: 'TMDB_READ_ACCESS_TOKEN';
   omdbApiKey: 'OMDB_API_KEY';
 }
 
 export const serverEnvNames: ServerEnvNames = {
   tmdbApiKey: 'TMDB_API_KEY',
+  tmdbReadAccessToken: 'TMDB_READ_ACCESS_TOKEN',
   omdbApiKey: 'OMDB_API_KEY',
 };
 
