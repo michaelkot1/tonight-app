@@ -2,7 +2,11 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
+import type { Database } from '@/lib/database.types';
 import { env, hasSupabaseEnv } from '@/lib/env';
+
+/** Typed Supabase client for the Tonight schema (generated in database.types.ts). */
+export type TonightSupabaseClient = SupabaseClient<Database>;
 
 /**
  * Expo SecureStore adapter for Supabase auth sessions.
@@ -34,16 +38,16 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-let client: SupabaseClient | null = null;
+let client: TonightSupabaseClient | null = null;
 
 /** Returns null when Supabase env is missing — callers must null-check. */
-export function getSupabase(): SupabaseClient | null {
+export function getSupabase(): TonightSupabaseClient | null {
   if (!hasSupabaseEnv()) {
     return null;
   }
 
   if (!client) {
-    client = createClient(env.supabaseUrl!, env.supabaseAnonKey!, {
+    client = createClient<Database>(env.supabaseUrl!, env.supabaseAnonKey!, {
       auth: {
         storage: ExpoSecureStoreAdapter,
         autoRefreshToken: true,

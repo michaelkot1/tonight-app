@@ -1,7 +1,7 @@
 # PLAN.md — Tonight (phased build plan)
 
 > Working proposal from the orchestrator. Companion docs: [`spec.md`](spec.md), [`design.md`](design.md), [`AGENTS.md`](AGENTS.md).
-> Status: **Phase 0 scaffolding in progress on `cursor/phase-0-foundations`.**
+> Status: **Phase 1 data model & backend complete on `cursor/phase-1-data-model` (schema migrated, RLS verified, advisors clean, types generated & wired). Phase 0 foundations done.**
 
 This plan is intentionally phased and top-down. Each phase produces reviewable, mergeable work on a feature branch (never `main`). Exploration → `scout`, implementation → `implementer`, review → orchestrator (main agent).
 
@@ -77,7 +77,7 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 - TMDB ingestion strategy: on-demand fetch + cache into `titles`; provider availability cached with TTL.
 - Generate TypeScript types (`generate_typescript_types`) into the client.
 
-**Exit:** Schema migrated, RLS verified, types generated, advisors clean.
+**Exit:** Schema migrated, RLS verified, types generated, advisors clean. ✅ **Done** — 7 `phase1_*` migrations; RLS on all 7 tables; `accept_invite` RPC for two-way connect; `is_following` helper for follower visibility; types in `src/lib/database.types.ts`. Only remaining advisor items: intentional `accept_invite` SECURITY DEFINER RPC (by design) and empty-DB unused-index INFOs.
 
 ## Phase 2 — Auth & onboarding
 
