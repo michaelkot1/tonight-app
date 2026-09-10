@@ -1,7 +1,7 @@
 # PLAN.md — Tonight (phased build plan)
 
 > Working proposal from the orchestrator. Companion docs: [`spec.md`](spec.md), [`design.md`](design.md), [`AGENTS.md`](AGENTS.md).
-> Status: **Phase 2 auth & onboarding client foundation complete on `cursor/phase-2-auth-onboarding` (email auth, route guard, full onboarding UI + persistence, profile sign-out/delete). Apple/Google OAuth + notifications OS prompt + contacts deferred by owner until credentials/dev client. Phase 1 backend + Phase 0 foundations done.**
+> Status: **Phase 3 client complete on `cursor/phase-3-titles-home` (uncommitted; pending owner Edge Function secrets + smoke-test). Phase 2 auth foundation on `cursor/phase-2-auth-onboarding`. Apple/Google OAuth + notifications OS prompt + contacts deferred. Phase 1 + Phase 0 done.**
 
 This plan is intentionally phased and top-down. Each phase produces reviewable, mergeable work on a feature branch (never `main`). Exploration → `scout`, implementation → `implementer`, review → orchestrator (main agent).
 
@@ -101,8 +101,27 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 - Search/browse titles (TMDB) and rate with Loved / Liked / Meh.
 - Home: "For You" hero ("Tonight's pick"), poster rails, rating badges, ambient friend piles — matching `design.md` hero + rail specs.
 - Poster rail + hero card components built to token spec (radii, scrims, sizes).
+- Wire onboarding taste-seed to real TMDB titles (deferred from Phase 2).
+
+**Orchestrator locks (2026-09-10):**
+- **Ingest:** Supabase Edge Function(s) with service role (mirror `delete-account`); TMDB/OMDb secrets stay server-side. Clients never write `titles` (RLS select-only).
+- **Contract:** search upserts lightweight `titles` rows; detail/ensure enriches providers + OMDb scores.
+- **Search UX:** Home header search → push search screen (no 4th tab).
+- **Detail routing:** stack/modal routes for `search` + `title/[id]` (hidden from tab bar).
+- **Interim Tonight’s pick (pre-Decider):** trending/popular filtered to user’s services when possible; else highest `tmdb_popularity` among cached titles; empty state if none.
+- **Rails:** `FlatList` now; FlashList deferred to Phase 6.
+- **OMDb:** enrich on detail/ensure, not on every search hit.
 
 **Exit:** User can find, rate, and see titles; Home renders per design.
+
+**Status (2026-09-10):** 🟢 **Wave 1 + Wave 2 implemented** on `cursor/phase-3-titles-home` (uncommitted, pending owner review/smoke-test).
+- Edge Functions deployed via Supabase MCP (all `verify_jwt`): `tmdb-search`, `tmdb-title`, `tmdb-popular`.
+- Data layer: `src/lib/titles.ts` (typed JSON parsers + image/display helpers), `src/lib/edge.ts`, hooks `useTitleSearch` / `useTitle` / `usePopularTitles` / `useRateTitle` / `useMyRatings`; provider→service matcher in `src/lib/services.ts`.
+- UI primitives: `RatingControl`, `PosterCard`, `PosterRail`, `HeroCard`.
+- Screens: Home (For You + search affordance + interim Tonight’s pick hero + Popular / Your ratings / More rails), Search (`(tabs)/search`, hidden), Title detail (`(tabs)/title/[id]`, hidden; scores + US providers + rating), onboarding taste-seed wired to real popular titles.
+- Interim Tonight’s pick = top trending title; provider-based service filtering deferred until enriched rows / Decider (lightweight popular feed omits providers).
+- Verify: `tsc`, `expo lint`, `expo export --platform ios` all clean.
+- **Blocker (owner):** set Supabase Edge Function secrets `TMDB_READ_ACCESS_TOKEN` (or `TMDB_API_KEY`) + `OMDB_API_KEY`; without them the `tmdb-*` functions return `tmdb_not_configured` / no OMDb scores.
 
 ## Phase 4 — Friends & invites
 
