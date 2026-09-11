@@ -1,29 +1,53 @@
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
+import { ServiceGrid } from '@/components/service-grid';
 import { ThemedText } from '@/components/themed-text';
 import { useProfile } from '@/hooks/use-profile';
-import { useUserServices } from '@/hooks/use-user-services';
+import { useSetUserServices, useUserServices } from '@/hooks/use-user-services';
 import { routes } from '@/lib/routes';
-import { SERVICE_CATALOG } from '@/lib/services';
+import type { StreamingService } from '@/lib/services';
 import { useAuth } from '@/providers/auth-provider';
 import { colors, radius, spacing } from '@/theme';
-
-const SERVICE_LABELS = new Map(
-  SERVICE_CATALOG.map(({ service, displayName }) => [service, displayName]),
-);
 
 export function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut, deleteAccount } = useAuth();
   const { data: profile } = useProfile();
-  const { data: services } = useUserServices();
+  const { data: existing } = useUserServices();
+  const setServices = useSetUserServices();
+
+  // `null` until the user interacts — display derives from the saved selection.
+  const [edited, setEdited] = useState<StreamingService[] | null>(null);
+  const [minServiceHint, setMinServiceHint] = useState(false);
+  const selected = edited ?? existing ?? [];
 
   const handleLabel = profile?.handle ? `@${profile.handle}` : 'No handle yet';
   const displayName = profile?.display_name ?? user?.email ?? 'Your profile';
+
+  function toggle(service: StreamingService) {
+    const base = edited ?? existing ?? [];
+    const next = base.includes(service)
+      ? base.filter((s) => s !== service)
+      : [...base, service];
+
+    if (next.length === 0) {
+      setMinServiceHint(true);
+      return;
+    }
+
+    setMinServiceHint(false);
+    setEdited(next);
+    setServices.mutate(next, {
+      onError: () => {
+        setEdited(existing ?? []);
+      },
+    });
+  }
 
   function confirmDelete() {
     Alert.alert(
@@ -67,19 +91,24 @@ export function ProfileScreen() {
 
       <View style={styles.card}>
         <ThemedText variant="sectionRail">Streaming services</ThemedText>
-        {services && services.length > 0 ? (
-          <View style={styles.serviceList}>
-            {services.map((service) => (
-              <View key={service} style={styles.servicePill}>
-                <ThemedText variant="caption" style={styles.servicePillText}>
-                  {SERVICE_LABELS.get(service) ?? service}
-                </ThemedText>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <ThemedText variant="caption">No services selected yet.</ThemedText>
-        )}
+        <ThemedText variant="caption">
+          Tap to add or remove. Keep at least one so we can recommend something tonight.
+        </ThemedText>
+        <ServiceGrid
+          selected={selected}
+          onToggle={toggle}
+          disabled={setServices.isPending}
+        />
+        {minServiceHint ? (
+          <ThemedText variant="caption">
+            Keep at least one streaming service selected.
+          </ThemedText>
+        ) : null}
+        {setServices.isError ? (
+          <ThemedText variant="caption">
+            Couldn't save your services. Please try again.
+          </ThemedText>
+        ) : null}
       </View>
 
       <View style={styles.actions}>
@@ -129,21 +158,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.xxl,
     gap: spacing.md,
-  },
-  serviceList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  servicePill: {
-    backgroundColor: colors.shell,
-    borderRadius: radius.full,
-    borderCurve: 'continuous',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  servicePillText: {
-    color: colors.textPrimary,
   },
   actions: {
     gap: spacing.sm,

@@ -43,3 +43,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Raw brand logo packs (curated copies live under assets/images/streaming/)
+streaming_logos/
