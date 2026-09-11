@@ -48,7 +48,6 @@ export default function TabsLayout() {
       />
       {/* Hidden from the tab bar — reached via Home / Profile pushes. */}
       <Tabs.Screen name="search" options={{ href: null }} />
-      <Tabs.Screen name="title/[id]" options={{ href: null }} />
       <Tabs.Screen name="friends" options={{ href: null }} />
     </Tabs>
   );
