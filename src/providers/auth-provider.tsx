@@ -12,7 +12,9 @@ import {
 } from 'react';
 
 import { hasSupabaseEnv } from '@/lib/env';
+import { flushPendingInvite } from '@/lib/pending-invite';
 import { getSupabase } from '@/lib/supabase';
+import { followingQueryKey } from '@/hooks/use-friends';
 import {
   fetchProfile,
   profileQueryKey,
@@ -44,7 +46,9 @@ interface AuthContextValue {
   profileLoading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<AuthResult>;
   signUpWithEmail: (email: string, password: string) => Promise<SignUpResult>;
-  /** Resend the signup confirmation email (standard link). */
+  /** Confirm signup with the 6-digit email OTP (SMTP template). */
+  verifyEmailOtp: (email: string, token: string) => Promise<AuthResult>;
+  /** Resend the signup confirmation email (OTP code via SMTP). */
   resendConfirmationEmail: (email: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<AuthResult>;
@@ -105,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Handle the email-confirmation deep link: the link 302-redirects into the app
   // with a PKCE `?code=`, which we exchange for a session (on the same device that
   // signed up). onAuthStateChange then drives the root redirect into the app.
+  // Invite deep links use path `/invite/[code]` — never the `?code=` query param.
   useEffect(() => {
     if (!supabase) return;
 
@@ -124,6 +129,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => sub.remove();
   }, [supabase]);
+
+  // Flush a stashed invite code as soon as a session exists (no handle/onboarded_at).
+  useEffect(() => {
+    if (!supabase || !session?.user?.id) return;
+    void flushPendingInvite().then((result) => {
+      if (result.accepted) {
+        queryClient.invalidateQueries({
+          queryKey: followingQueryKey(session.user.id),
+        });
+      }
+    });
+  }, [supabase, session?.user?.id, queryClient]);
 
   const user = session?.user ?? null;
 
@@ -166,11 +183,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           needsEmailConfirmation: false,
         };
       }
-      // Confirm-email enabled → no session until the emailed link is clicked.
+      // Confirm-email enabled → no session until the 6-digit OTP is verified.
       return {
         error: null,
         needsEmailConfirmation: data.session == null,
       };
+    },
+    [supabase],
+  );
+
+  const verifyEmailOtp = useCallback(
+    async (email: string, token: string): Promise<AuthResult> => {
+      if (!supabase) return { error: NOT_CONFIGURED_ERROR };
+      const trimmed = token.trim();
+      if (!/^\d{6}$/.test(trimmed)) {
+        return { error: 'Enter the 6-digit code from your email.' };
+      }
+      const { error } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: trimmed,
+        type: 'signup',
+      });
+      return { error: error?.message ?? null };
     },
     [supabase],
   );
@@ -180,8 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!supabase) return { error: NOT_CONFIGURED_ERROR };
       const { error } = await supabase.auth.resend({
         type: 'signup',
-        email,
-        options: { emailRedirectTo: authRedirectUrl() },
+        email: email.trim(),
       });
       return { error: error?.message ?? null };
     },
@@ -216,6 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profileLoading: profileQuery.isLoading,
       signInWithEmail,
       signUpWithEmail,
+      verifyEmailOtp,
       resendConfirmationEmail,
       signOut,
       deleteAccount,
@@ -229,6 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profileQuery.isLoading,
       signInWithEmail,
       signUpWithEmail,
+      verifyEmailOtp,
       resendConfirmationEmail,
       signOut,
       deleteAccount,

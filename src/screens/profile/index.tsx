@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -5,6 +6,7 @@ import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { useProfile } from '@/hooks/use-profile';
 import { useUserServices } from '@/hooks/use-user-services';
+import { routes } from '@/lib/routes';
 import { SERVICE_CATALOG } from '@/lib/services';
 import { useAuth } from '@/providers/auth-provider';
 import { colors, radius, spacing } from '@/theme';
@@ -15,6 +17,7 @@ const SERVICE_LABELS = new Map(
 
 export function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user, signOut, deleteAccount } = useAuth();
   const { data: profile } = useProfile();
   const { data: services } = useUserServices();
@@ -80,6 +83,11 @@ export function ProfileScreen() {
       </View>
 
       <View style={styles.actions}>
+        <Button
+          label="Friends"
+          variant="secondary"
+          onPress={() => router.push(routes.friends)}
+        />
         <Button label="Sign out" variant="secondary" onPress={signOut} />
         <Button label="Delete account" variant="ghost" onPress={confirmDelete} />
       </View>

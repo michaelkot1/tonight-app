@@ -1,26 +1,27 @@
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
-import { Share, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Share, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { OnboardingScaffold } from '@/components/onboarding-scaffold';
 import { ThemedText } from '@/components/themed-text';
+import { useMyInvite } from '@/hooks/use-friends';
 import { routes } from '@/lib/routes';
 import { colors, radius, spacing } from '@/theme';
 
-// Placeholder invite link. Real per-user invite codes (invites table) land with the
-// friends/invite feature; contacts matching is deferred this phase.
-const PLACEHOLDER_CODE = 'tonight';
-
 export function InviteScreen() {
   const router = useRouter();
-  const inviteUrl = Linking.createURL(`/invite/${PLACEHOLDER_CODE}`);
+  const invite = useMyInvite();
+  const inviteUrl = invite.data
+    ? Linking.createURL(`/invite/${invite.data}`)
+    : null;
 
   function goNext() {
     router.push(routes.onboarding.notifications);
   }
 
   async function handleShare() {
+    if (!inviteUrl) return;
     try {
       await Share.share({
         message: `Join me on Tonight — we'll decide what to watch in 60 seconds. ${inviteUrl}`,
@@ -42,11 +43,26 @@ export function InviteScreen() {
     >
       <View style={styles.card}>
         <ThemedText variant="caption">Your invite link</ThemedText>
-        <ThemedText variant="cardTitle" numberOfLines={1}>
-          {inviteUrl}
-        </ThemedText>
+        {invite.isLoading ? (
+          <ActivityIndicator color={colors.textMuted} />
+        ) : invite.isError || !inviteUrl ? (
+          <ThemedText variant="metadata">
+            Invite link unavailable right now — you can share from Friends
+            later.
+          </ThemedText>
+        ) : (
+          <ThemedText variant="cardTitle" numberOfLines={2}>
+            {inviteUrl}
+          </ThemedText>
+        )}
       </View>
-      <Button label="Share invite link" variant="secondary" onPress={handleShare} />
+      <Button
+        label="Share invite link"
+        variant="secondary"
+        onPress={handleShare}
+        disabled={!inviteUrl}
+        loading={invite.isLoading}
+      />
     </OnboardingScaffold>
   );
 }

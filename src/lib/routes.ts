@@ -13,11 +13,18 @@ export const asHref = (path: string): Href => path as Href;
 /** Centralized app route hrefs (groups qualified so the auth guard is deterministic). */
 export const routes = {
   auth: asHref('/(auth)'),
+  /** Email OTP confirmation after create account. */
+  confirmEmail: (email: string): Href =>
+    asHref(`/(auth)/confirm-email?email=${encodeURIComponent(email)}`),
   tabs: asHref('/(tabs)'),
   /** Search screen, pushed from the Home header (hidden tab). */
   search: asHref('/(tabs)/search'),
   /** Title detail screen (hidden tab). */
   title: (id: string): Href => asHref(`/(tabs)/title/${id}`),
+  /** Friends management (hidden tab), from Profile. */
+  friends: asHref('/(tabs)/friends'),
+  /** Deep-link invite accept route (outside tab bar). */
+  inviteAccept: (code: string): Href => asHref(`/invite/${code}`),
   onboarding: {
     services: asHref('/(onboarding)/services'),
     tasteSeed: asHref('/(onboarding)/taste-seed'),
