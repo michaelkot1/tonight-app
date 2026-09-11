@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -18,12 +18,14 @@ import { ThemedText } from '@/components/themed-text';
 import {
   useFollow,
   useFollowing,
+  useMatchContacts,
   useMyInvite,
   useSearchProfiles,
   useUnfollow,
   type FollowingRow,
   type ProfileSummary,
 } from '@/hooks/use-friends';
+import { loadContactEmails } from '@/lib/contacts';
 import { colors, radius, spacing } from '@/theme';
 
 function profileLabel(profile: ProfileSummary): string {
@@ -56,16 +58,27 @@ function ProfileRow({
   );
 }
 
+type ContactsPhase =
+  | 'idle'
+  | 'requesting'
+  | 'denied'
+  | 'matching'
+  | 'ready'
+  | 'error';
+
 export function FriendsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const [contactEmails, setContactEmails] = useState<string[]>([]);
+  const [contactsPhase, setContactsPhase] = useState<ContactsPhase>('idle');
 
   const invite = useMyInvite();
   const following = useFollowing();
   const search = useSearchProfiles(query);
   const follow = useFollow();
   const unfollow = useUnfollow();
+  const contactMatches = useMatchContacts(contactEmails);
 
   const inviteUrl = useMemo(() => {
     if (!invite.data) return null;
@@ -91,10 +104,37 @@ export function FriendsScreen() {
     }
   }
 
+  const handleFindContacts = useCallback(async () => {
+    setContactsPhase('requesting');
+    try {
+      const { status, emails } = await loadContactEmails();
+      if (status !== 'granted') {
+        setContactEmails([]);
+        setContactsPhase('denied');
+        return;
+      }
+      setContactEmails(emails);
+      setContactsPhase(emails.length === 0 ? 'ready' : 'matching');
+    } catch {
+      setContactsPhase('error');
+    }
+  }, []);
+
+  // Flip matching → ready once the query settles.
+  const resolvedContactsPhase: ContactsPhase =
+    contactsPhase === 'matching' && !contactMatches.isFetching
+      ? contactMatches.isError
+        ? 'error'
+        : 'ready'
+      : contactsPhase;
+
   const trimmed = query.trim().replace(/^@+/, '');
   const isSearching = trimmed.length >= 2;
   const searchResults = search.data ?? [];
   const followingRows = following.data ?? [];
+  const matchResults = (contactMatches.data ?? []).filter(
+    (profile) => !followingIds.has(profile.id),
+  );
 
   const listHeader = (
     <View style={styles.listHeader}>
@@ -119,6 +159,62 @@ export function FriendsScreen() {
             />
           </>
         )}
+      </View>
+
+      <View style={styles.card}>
+        <ThemedText variant="sectionRail">From contacts</ThemedText>
+        <ThemedText variant="caption" style={styles.contactsCopy}>
+          Tonight matches emails already on the app so you can follow friends.
+          We never store your address book or show unmatched contacts.
+        </ThemedText>
+        {resolvedContactsPhase === 'idle' || resolvedContactsPhase === 'denied' ? (
+          <Button
+            label={
+              resolvedContactsPhase === 'denied'
+                ? 'Try contacts again'
+                : 'Find friends in contacts'
+            }
+            variant="secondary"
+            onPress={handleFindContacts}
+          />
+        ) : null}
+        {resolvedContactsPhase === 'requesting' ||
+        resolvedContactsPhase === 'matching' ||
+        contactMatches.isFetching ? (
+          <ActivityIndicator color={colors.textMuted} />
+        ) : null}
+        {resolvedContactsPhase === 'denied' ? (
+          <ThemedText variant="metadata">
+            Contacts access is off. You can enable it in Settings, or search by
+            @handle instead.
+          </ThemedText>
+        ) : null}
+        {resolvedContactsPhase === 'error' ? (
+          <ThemedText variant="metadata">
+            Couldn’t match contacts right now. Try again in a moment.
+          </ThemedText>
+        ) : null}
+        {resolvedContactsPhase === 'ready' && matchResults.length === 0 ? (
+          <ThemedText variant="metadata">
+            No contacts on Tonight yet — share your invite link instead.
+          </ThemedText>
+        ) : null}
+        {resolvedContactsPhase === 'ready' && matchResults.length > 0
+          ? matchResults.map((profile) => (
+              <ProfileRow
+                key={profile.id}
+                profile={profile}
+                trailing={
+                  <Button
+                    label="Follow"
+                    variant="secondary"
+                    disabled={follow.isPending}
+                    onPress={() => follow.mutate(profile.id)}
+                  />
+                }
+              />
+            ))
+          : null}
       </View>
 
       <TextInput
@@ -277,6 +373,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
     gap: spacing.md,
+  },
+  contactsCopy: {
+    color: colors.textMuted,
   },
   row: {
     flexDirection: 'row',

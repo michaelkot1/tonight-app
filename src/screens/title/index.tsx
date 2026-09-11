@@ -6,8 +6,10 @@ import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { FriendPile } from '@/components/friend-pile';
 import { RatingControl } from '@/components/rating-control';
 import { ThemedText } from '@/components/themed-text';
+import { useFriendSocialByTitle } from '@/hooks/use-friends';
 import { useMyRatings, useRateTitle, useTitle } from '@/hooks/use-titles';
 import {
   formatGenreMeta,
@@ -48,6 +50,9 @@ export function TitleDetailScreen() {
   const { data: title, isLoading, isError, refetch } = useTitle(id);
   const { data: myRatings } = useMyRatings();
   const rateTitle = useRateTitle();
+  const socialTitleIds = useMemo(() => (id ? [id] : []), [id]);
+  const { data: socialByTitle } = useFriendSocialByTitle(socialTitleIds);
+  const friendSocial = id ? socialByTitle?.get(id) : undefined;
 
   const currentVerdict = useMemo<Verdict | null>(() => {
     const match = myRatings?.find((rating) => rating.title?.id === id);
@@ -134,6 +139,15 @@ export function TitleDetailScreen() {
             <ThemedText variant="metadata" style={styles.meta}>
               {metaLine}
             </ThemedText>
+          ) : null}
+
+          {friendSocial ? (
+            <View style={styles.socialRow}>
+              <FriendPile friends={friendSocial.pile} />
+              <ThemedText variant="caption" numberOfLines={2} style={styles.socialLine}>
+                {friendSocial.socialLine}
+              </ThemedText>
+            </View>
           ) : null}
 
           {scores.length > 0 ? (
@@ -291,6 +305,15 @@ const styles = StyleSheet.create({
   },
   meta: {
     marginTop: -spacing.sm,
+  },
+  socialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  socialLine: {
+    flexShrink: 1,
+    color: colors.textMuted,
   },
   scoreRow: {
     flexDirection: 'row',

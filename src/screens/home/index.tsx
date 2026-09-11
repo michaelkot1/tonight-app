@@ -4,10 +4,12 @@ import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { FriendPile } from '@/components/friend-pile';
 import { HeroCard } from '@/components/hero-card';
 import { PosterCard } from '@/components/poster-card';
 import { PosterRail } from '@/components/poster-rail';
 import { ThemedText } from '@/components/themed-text';
+import { useFriendSocialByTitle } from '@/hooks/use-friends';
 import {
   useMyRatings,
   usePopularTitles,
@@ -42,11 +44,24 @@ export function HomeScreen() {
   const popularRail = railTitles.slice(0, 8);
 
   const ratedTitles = useMemo(
-    () => (myRatings ?? []).filter((rating): rating is MyRating & { title: NonNullable<MyRating['title']> } =>
-      rating.title != null,
-    ),
+    () =>
+      (myRatings ?? []).filter(
+        (rating): rating is MyRating & { title: NonNullable<MyRating['title']> } =>
+          rating.title != null,
+      ),
     [myRatings],
   );
+
+  const socialTitleIds = useMemo(() => {
+    const ids: string[] = [];
+    if (pick) ids.push(pick.id);
+    for (const item of popularRail) ids.push(item.id);
+    for (const item of exploreTitles) ids.push(item.id);
+    for (const item of ratedTitles) ids.push(item.title.id);
+    return ids;
+  }, [pick, popularRail, exploreTitles, ratedTitles]);
+
+  const { data: socialByTitle } = useFriendSocialByTitle(socialTitleIds);
 
   function openTitle(id: string) {
     router.push(routes.title(id));
@@ -55,6 +70,7 @@ export function HomeScreen() {
   const pickMeta = pick
     ? [releaseYear(pick.release_date), MEDIA_LABEL[pick.media_type]].filter(Boolean).join(' · ')
     : undefined;
+  const pickSocial = pick ? socialByTitle?.get(pick.id) : undefined;
 
   return (
     <ScrollView
@@ -92,6 +108,10 @@ export function HomeScreen() {
             posterPath={pick.poster_path}
             backdropPath={pick.backdrop_path}
             meta={pickMeta}
+            socialLine={pickSocial?.socialLine}
+            friendPile={
+              pickSocial ? <FriendPile friends={pickSocial.pile} /> : undefined
+            }
             onPress={() => openTitle(pick.id)}
             onWatch={() => openTitle(pick.id)}
           />
@@ -112,14 +132,20 @@ export function HomeScreen() {
           title="Popular now"
           data={popularRail}
           keyExtractor={(item) => item.id}
-          renderItem={(item) => (
-            <PosterCard
-              title={item.title}
-              posterPath={item.poster_path}
-              rating={item.tmdb_rating}
-              onPress={() => openTitle(item.id)}
-            />
-          )}
+          renderItem={(item) => {
+            const social = socialByTitle?.get(item.id);
+            return (
+              <PosterCard
+                title={item.title}
+                posterPath={item.poster_path}
+                rating={item.tmdb_rating}
+                friendPile={
+                  social ? <FriendPile friends={social.pile} /> : undefined
+                }
+                onPress={() => openTitle(item.id)}
+              />
+            );
+          }}
         />
       ) : null}
 
@@ -128,15 +154,21 @@ export function HomeScreen() {
           title="Your ratings"
           data={ratedTitles}
           keyExtractor={(item) => item.id}
-          renderItem={(item) => (
-            <PosterCard
-              title={item.title.title}
-              posterPath={item.title.poster_path}
-              genres={parseGenres(item.title.genres)}
-              rating={displayRating(item.title)}
-              onPress={() => openTitle(item.title.id)}
-            />
-          )}
+          renderItem={(item) => {
+            const social = socialByTitle?.get(item.title.id);
+            return (
+              <PosterCard
+                title={item.title.title}
+                posterPath={item.title.poster_path}
+                genres={parseGenres(item.title.genres)}
+                rating={displayRating(item.title)}
+                friendPile={
+                  social ? <FriendPile friends={social.pile} /> : undefined
+                }
+                onPress={() => openTitle(item.title.id)}
+              />
+            );
+          }}
         />
       ) : null}
 
@@ -145,14 +177,20 @@ export function HomeScreen() {
           title="More to explore"
           data={exploreTitles}
           keyExtractor={(item) => item.id}
-          renderItem={(item) => (
-            <PosterCard
-              title={item.title}
-              posterPath={item.poster_path}
-              rating={item.tmdb_rating}
-              onPress={() => openTitle(item.id)}
-            />
-          )}
+          renderItem={(item) => {
+            const social = socialByTitle?.get(item.id);
+            return (
+              <PosterCard
+                title={item.title}
+                posterPath={item.poster_path}
+                rating={item.tmdb_rating}
+                friendPile={
+                  social ? <FriendPile friends={social.pile} /> : undefined
+                }
+                onPress={() => openTitle(item.id)}
+              />
+            );
+          }}
         />
       ) : null}
     </ScrollView>
