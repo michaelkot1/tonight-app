@@ -4,9 +4,17 @@ import {
   useQueryClient,
   type UseQueryResult,
 } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import type { Tables } from '@/lib/database.types';
+import { invokeEdgeFunction } from '@/lib/edge';
+import {
+  aggregateSocialByTitle,
+  type FriendTitleRating,
+  type TitleSocialProof,
+} from '@/lib/social';
 import { getSupabase } from '@/lib/supabase';
+import type { Verdict } from '@/lib/titles';
 import { useDebouncedValue } from '@/hooks/use-titles';
 import { useAuth } from '@/providers/auth-provider';
 
@@ -42,6 +50,16 @@ export const followersQueryKey = (userId: string | undefined) =>
 export const profileSearchQueryKey = (query: string) =>
   ['profile-search', query] as const;
 
+export const friendRatingsQueryKey = (
+  userId: string | undefined,
+  titleIdsKey: string,
+) => ['friend-ratings', userId, titleIdsKey] as const;
+
+export const matchContactsQueryKey = (emailsKey: string) =>
+  ['match-contacts', emailsKey] as const;
+
+const MAX_CONTACT_EMAILS = 200;
+
 function normalizeHandleQuery(raw: string): string {
   return raw.trim().replace(/^@+/, '').toLowerCase();
 }
@@ -52,6 +70,7 @@ function invalidateFriendGraph(
 ) {
   void queryClient.invalidateQueries({ queryKey: followingQueryKey(userId) });
   void queryClient.invalidateQueries({ queryKey: followersQueryKey(userId) });
+  void queryClient.invalidateQueries({ queryKey: ['friend-ratings', userId] });
 }
 
 /** Durable reusable invite code for the signed-in user (`create_or_get_my_invite`). */
@@ -288,6 +307,114 @@ export function useSearchProfiles(
 
       if (error) throw error;
       return (data ?? []) as ProfileSummary[];
+    },
+  });
+}
+
+/**
+ * Batched friend ratings for visible title ids (RLS: self + people you follow).
+ * Returns a map of titleId → pile + socialLine (excludes the signed-in user).
+ */
+export function useFriendSocialByTitle(
+  titleIds: string[],
+): UseQueryResult<Map<string, TitleSocialProof>> {
+  const { user } = useAuth();
+  const uniqueIds = useMemo(() => {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const id of titleIds) {
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+    }
+    return ids.sort();
+  }, [titleIds]);
+  const titleIdsKey = uniqueIds.join(',');
+
+  return useQuery({
+    queryKey: friendRatingsQueryKey(user?.id, titleIdsKey),
+    enabled: !!user?.id && uniqueIds.length > 0,
+    staleTime: 1000 * 60,
+    queryFn: async () => {
+      const supabase = getSupabase();
+      if (!supabase || !user?.id) return new Map<string, TitleSocialProof>();
+
+      const { data, error } = await supabase
+        .from('ratings')
+        .select(
+          `
+          title_id,
+          verdict,
+          user_id,
+          profile:profiles!ratings_user_id_fkey (
+            id,
+            handle,
+            display_name,
+            avatar_url
+          )
+        `,
+        )
+        .in('title_id', uniqueIds)
+        .neq('user_id', user.id);
+
+      if (error) throw error;
+
+      const rows: FriendTitleRating[] = [];
+      for (const row of data ?? []) {
+        const profile = row.profile as ProfileSummary | ProfileSummary[] | null;
+        const resolved = Array.isArray(profile) ? profile[0] : profile;
+        if (!resolved) continue;
+        rows.push({
+          titleId: row.title_id,
+          verdict: row.verdict as Verdict,
+          profile: resolved,
+        });
+      }
+
+      return aggregateSocialByTitle(rows);
+    },
+  });
+}
+
+interface MatchContactsResponse {
+  matches: ProfileSummary[];
+}
+
+/** Normalize + de-dupe emails for the match-contacts Edge Function. */
+export function normalizeContactEmails(raw: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of raw) {
+    const email = value.trim().toLowerCase();
+    if (!email || !email.includes('@') || seen.has(email)) continue;
+    seen.add(email);
+    out.push(email);
+    if (out.length >= MAX_CONTACT_EMAILS) break;
+  }
+  return out;
+}
+
+/**
+ * Match device contact emails against Tonight users via the `match-contacts`
+ * Edge Function. Returns profile summaries only — never unmatched PII.
+ */
+export function useMatchContacts(
+  emails: string[],
+): UseQueryResult<ProfileSummary[]> {
+  const { user } = useAuth();
+  const normalized = useMemo(() => normalizeContactEmails(emails), [emails]);
+  const emailsKey = normalized.join(',');
+
+  return useQuery({
+    queryKey: matchContactsQueryKey(emailsKey),
+    enabled: !!user?.id && normalized.length > 0,
+    staleTime: 1000 * 60 * 5,
+    queryFn: async () => {
+      const response = await invokeEdgeFunction<
+        MatchContactsResponse,
+        { emails: string[] }
+      >('match-contacts', { emails: normalized });
+      return response.matches ?? [];
     },
   });
 }

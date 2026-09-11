@@ -38,7 +38,7 @@ Work on feature branches (`cursor/...`), never directly on `main`. Companion doc
 - [x] Env placeholders for future Google client IDs (optional)
 - [ ] **Deferred (owner):** Apple + Google OAuth wiring (credentials + likely dev client)
 - [ ] **Deferred (owner):** `expo-notifications` OS permission ask
-- [ ] **Deferred (owner):** `expo-contacts` match; real per-user invite codes (Phase 4)
+- [x] **Moved to Phase 4:** `expo-contacts` match + real per-user invite codes (Wave 1–2)
 - [ ] **Deferred:** real TMDB taste-seed ratings (Phase 3)
 - [ ] Owner: smoke-test email auth + onboarding end-to-end in Expo Go
 - [ ] Owner: provide Apple/Google OAuth credentials when ready to wire
@@ -76,9 +76,11 @@ Work on feature branches (`cursor/...`), never directly on `main`. Companion doc
 - [x] Verify: `tsc`, `expo lint`, `expo export --platform ios` clean
 
 ### Wave 2 — contacts + ambient feed (after Wave 1)
-- [ ] Contacts match Edge Function + `expo-contacts` (permission copy) — deferred identity match vs `auth.users`
-- [ ] Home/detail: friend piles / social lines from followed ratings
-- [ ] Optional: clipboard copy-link polish
+- [x] Contacts match Edge Function (`match-contacts`) + service-role RPC `match_profiles_by_emails` + `expo-contacts` (permission copy) on Friends + optional onboarding invite
+- [x] Home/detail: friend piles / social lines from followed ratings (`FriendPile`, Loved-first copy)
+- [ ] Optional: clipboard copy-link polish — **skipped** (Share already works; timeboxed)
+- [x] Verify: `tsc`, `expo lint`, `expo export --platform ios` clean; Edge Function deployed via Supabase MCP
+- [ ] **Owner smoke-test:** contacts match → Follow; Home/detail ambient piles with two accounts
 
 ## Phase 5 — Decider (stub)
 
