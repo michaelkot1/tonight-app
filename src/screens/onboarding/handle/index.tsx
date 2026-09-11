@@ -1,11 +1,18 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
+import { AvatarPicker } from '@/components/avatar-picker';
 import { OnboardingScaffold } from '@/components/onboarding-scaffold';
 import { TextInput } from '@/components/text-input';
 import { useHandleAvailability } from '@/hooks/use-handle-availability';
 import { useProfile, useUpdateHandle } from '@/hooks/use-profile';
+import {
+  avatarUrlForSelection,
+  type AvatarSelection,
+} from '@/lib/avatar';
 import { routes } from '@/lib/routes';
+import { spacing } from '@/theme';
 
 /** Lowercase and strip a source name down to a valid handle candidate. */
 function suggestHandle(source: string): string {
@@ -32,6 +39,9 @@ export function HandleScreen() {
   // `null` until the user types — value derives from an existing handle or a
   // suggestion off the display name so the field is prefilled without an effect.
   const [edited, setEdited] = useState<string | null>(null);
+  const [avatarSelection, setAvatarSelection] = useState<AvatarSelection>({
+    kind: 'letter',
+  });
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const suggestion = profile
@@ -51,7 +61,8 @@ export function HandleScreen() {
     if (!canContinue) return;
     setSaveError(null);
     try {
-      await updateHandle.mutateAsync(handle);
+      const avatarUrl = avatarUrlForSelection(avatarSelection, handle);
+      await updateHandle.mutateAsync({ handle, avatarUrl });
       router.push(routes.onboarding.watchWith);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Could not save handle.');
@@ -68,18 +79,31 @@ export function HandleScreen() {
       primaryLoading={updateHandle.isPending}
       onPrimary={handleContinue}
     >
-      <TextInput
-        label="Handle"
-        value={handle}
-        onChangeText={(text) => setEdited(suggestHandle(text))}
-        placeholder="yourname"
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete="username"
-        maxLength={20}
-        helper={saveError ? undefined : isError ? undefined : footer}
-        error={saveError ?? (isError ? footer : undefined)}
-      />
+      <View style={styles.body}>
+        <AvatarPicker
+          handle={handle}
+          selection={avatarSelection}
+          onSelect={setAvatarSelection}
+        />
+        <TextInput
+          label="Handle"
+          value={handle}
+          onChangeText={(text) => setEdited(suggestHandle(text))}
+          placeholder="yourname"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="username"
+          maxLength={20}
+          helper={saveError ? undefined : isError ? undefined : footer}
+          error={saveError ?? (isError ? footer : undefined)}
+        />
+      </View>
     </OnboardingScaffold>
   );
 }
+
+const styles = StyleSheet.create({
+  body: {
+    gap: spacing.xxl,
+  },
+});

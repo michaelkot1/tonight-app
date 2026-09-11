@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/button';
 import { TextInput } from '@/components/text-input';
 import { ThemedText } from '@/components/themed-text';
+import { UserAvatar } from '@/components/user-avatar';
 import {
   useFollow,
   useFollowing,
@@ -42,7 +43,11 @@ function ProfileRow({
 }) {
   return (
     <View style={styles.row}>
-      <View style={styles.avatar} />
+      <UserAvatar
+        uri={profile.avatar_url}
+        label={profile.handle ?? profile.display_name}
+        size={40}
+      />
       <View style={styles.rowBody}>
         <ThemedText variant="cardTitle" numberOfLines={1}>
           {profileLabel(profile)}
@@ -382,14 +387,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingVertical: spacing.sm,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.border,
   },
   rowBody: {
     flex: 1,

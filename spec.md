@@ -31,7 +31,7 @@ Tonight is a social “what to watch” app that turns your friends’ real rati
 - Auth — Continue with Apple / Google / Phone so taste, friends, and pushes can save. No long account wall.
 - Streaming services (required) — “Which of these do you pay for?” Multi-select logo grid (Netflix, Max, etc.). Only non-skippable setup step — the Decider only suggests what you can actually stream.
 - Taste seed (skippable, nudged) — Rate a few popular movies/TV you’ve seen with ❤️ Loved / 👍 Liked / 😐 Meh. Fixes cold start and teaches the core gesture.
-- Username — Pick an **@handle** so friends can find you. Auto-suggest from auth name; editable. Required before invite / search-for-friends paths.
+- Username — Pick an **@handle** so friends can find you. Auto-suggest from auth name; editable. Required before invite / search-for-friends paths. Same step: choose a **letter monogram** (default; stores `avatar_url` null) or a **DiceBear glass** PNG variant; Continue saves handle + avatar together and overwrites any prior OAuth avatar.
 - Watch-with *(skippable)* — Partner / Roommates / Friends / Solo chips. Primes defaults and invite copy.
 - Invite (skippable) — Invite from contacts or share a link so the social graph (and Decider) isn’t empty.
 - Notifications (skippable) — Value-framed ask first (“when something great lands on your services”), then the OS permission prompt.
