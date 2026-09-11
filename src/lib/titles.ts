@@ -17,6 +17,42 @@ export interface TitleGenre {
   name: string;
 }
 
+/** Resolve numeric TMDB genre ids when a cache row stored `name: String(id)`. */
+const TMDB_GENRE_NAMES: Record<number, string> = {
+  28: 'Action',
+  12: 'Adventure',
+  16: 'Animation',
+  35: 'Comedy',
+  80: 'Crime',
+  99: 'Documentary',
+  18: 'Drama',
+  10751: 'Family',
+  14: 'Fantasy',
+  36: 'History',
+  27: 'Horror',
+  10402: 'Music',
+  9648: 'Mystery',
+  10749: 'Romance',
+  878: 'Science Fiction',
+  10770: 'TV Movie',
+  53: 'Thriller',
+  10752: 'War',
+  37: 'Western',
+  10759: 'Action & Adventure',
+  10762: 'Kids',
+  10763: 'News',
+  10764: 'Reality',
+  10765: 'Sci-Fi & Fantasy',
+  10766: 'Soap',
+  10767: 'Talk',
+  10768: 'War & Politics',
+};
+
+function resolveGenreName(id: number, name: string | null): string | null {
+  if (name && !/^\d+$/.test(name)) return name;
+  return TMDB_GENRE_NAMES[id] ?? null;
+}
+
 /** A top-billed cast member. */
 export interface TitleCastMember {
   id: number;
@@ -72,8 +108,9 @@ export function parseGenres(value: unknown): TitleGenre[] {
   return asArray(value).flatMap((entry) => {
     if (!isRecord(entry)) return [];
     const id = toNumberOrNull(entry.id);
-    const name = toStringOrNull(entry.name);
-    if (id === null || name === null) return [];
+    if (id === null) return [];
+    const name = resolveGenreName(id, toStringOrNull(entry.name));
+    if (name === null) return [];
     return [{ id, name }];
   });
 }
@@ -175,7 +212,8 @@ export function tmdbLogoUrl(path: string | null | undefined, size: LogoSize = 'w
 export function formatGenreMeta(genres: TitleGenre[], limit = 2): string {
   return genres
     .slice(0, limit)
-    .map((g) => g.name)
+    .map((g) => resolveGenreName(g.id, g.name) ?? g.name)
+    .filter((name) => name.length > 0 && !/^\d+$/.test(name))
     .join(' · ');
 }
 

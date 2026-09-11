@@ -1,7 +1,7 @@
 # PLAN.md — Tonight (phased build plan)
 
 > Working proposal from the orchestrator. Companion docs: [`spec.md`](spec.md), [`design.md`](design.md), [`AGENTS.md`](AGENTS.md).
-> Status: **Phase 4 Wave 1 + Wave 2 implemented on `cursor/phase-4-friends-invites` (uncommitted; pending owner smoke-test). Phase 3 client complete (pending owner TMDB/OMDb Edge secrets). Apple/Google OAuth + notifications OS prompt deferred. Phase 1 + Phase 0 done.**
+> Status: **Phase 5 Wave 1 implemented on `cursor/phase-5-decider` (pending owner smoke-test; Phase 5 exit criteria not yet met). Phase 4 Wave 1 + Wave 2 on `cursor/phase-4-friends-invites`. Phase 3 client complete (pending owner TMDB/OMDb Edge secrets). Apple/Google OAuth + notifications OS prompt deferred. Phase 1 + Phase 0 done.**
 
 This plan is intentionally phased and top-down. Each phase produces reviewable, mergeable work on a feature branch (never `main`). Exploration → `scout`, implementation → `implementer`, review → orchestrator (main agent).
 
@@ -162,6 +162,13 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 - Shuffle re-roll to next-ranked candidates.
 
 **Exit:** Decider returns a correct, on-a-present-member's-service Top 3 for real friend/rating data, with why-picked + ratings + service label.
+
+**Status (2026-09-10):** 🟢 **Wave 1 implemented** on `cursor/phase-5-decider` (pending owner smoke-test — **not** marking Phase 5 complete).
+- Edge Function `decider-rank` deployed (`verify_jwt`): Loved=+3 / Liked=+1 / Meh=−2; weights `w_genre 0.40, w_actor 0.25, w_meta 0.15, w_quality 0.15, w_pop 0.05`; cold-start leans quality+pop; eligibility = unwatched by selected group + Movie/TV/Both + genre + union of members' `user_services` (provider id match, keyword fallback).
+- Candidate pool: prefer enriched `titles`; if thin, batch-enrich via tmdb-title patterns then popular ingest (timeboxed). Without TMDB secrets, enrich path skips and notes `enrich_skipped_tmdb_not_configured` / `cold_start_quality_pop_only`.
+- Client: `src/lib/decider.ts` + `useDeciderRank`; Decider screen Setup → Results (hero #1 + supporting #2/#3, Shuffle client offset over ranked list ≥12, tap → title detail). Friends admin chrome removed from Decider (Friends stays on Profile).
+- Setup UX polish: genre chips wrap (no horizontal scroll); “Find tonight's picks” pinned in a tab-bar-clearing footer (`spacing.navContent`); results step still full-page scroll.
+- **Blocker (owner):** same Edge secrets as Phase 3 (`TMDB_READ_ACCESS_TOKEN` / `TMDB_API_KEY` + `OMDB_API_KEY`) for enrichment when the cached enriched pool is thin (~5/69). Ranking still runs on already-enriched rows.
 
 ## Phase 6 — Polish, notifications & release prep
 

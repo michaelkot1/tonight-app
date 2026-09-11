@@ -53,6 +53,20 @@ None required for Phase 2. Consider RPC hardening when wiring handle edits from 
 
 ---
 
+## ISSUE-004 — Title meta shows genre IDs (e.g. `2026 · Movie · 27 · 53`)
+
+- Status: resolved
+- Location: `supabase/functions/decider-rank/index.ts` popular ingest; surfaces on title detail meta + PosterCard genre line
+- Problem: Meta line showed raw TMDB genre ids (`27`, `53`) instead of names (`Horror`, `Thriller`).
+- Suspected cause: `decider-rank` lightweight popular ingest stored `genres: genre_ids.map(id => ({ id, name: String(id) }))`. `tmdb-popular` / `tmdb-search` already map ids → names; Decider path did not.
+- Attempts:
+  - Attempt 1: Map genres via shared TMDB id→name tables in `decider-rank`; resolve numeric names in Edge + client `parseGenres` / `formatGenreMeta`; SQL repair rows where `name ~ '^[0-9]+$'`; redeploy `decider-rank`.
+    - Result: Succeeded. Obsession → Horror · Thriller; zero remaining digit-name genre rows.
+- Current status: resolved
+- Next step: None. Reload title detail to pick up repaired cache.
+
+---
+
 ## ISSUE-003 — Signup fails: "Error sending confirmation email"
 
 - Status: unresolved (owner SMTP config)

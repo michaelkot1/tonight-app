@@ -1,6 +1,6 @@
 # TASKS.md — Tonight
 
-Active milestone: **Phase 4 — Friends & invites** on `cursor/phase-4-friends-invites` (base: `cursor/phase-3-titles-home`)
+Active milestone: **Phase 5 — Decider** on `cursor/phase-5-decider` (base: `cursor/phase-4-friends-invites`)
 
 Work on feature branches (`cursor/...`), never directly on `main`. Companion docs: `plan.md`, `spec.md`, `design.md`.
 
@@ -82,9 +82,18 @@ Work on feature branches (`cursor/...`), never directly on `main`. Companion doc
 - [x] Verify: `tsc`, `expo lint`, `expo export --platform ios` clean; Edge Function deployed via Supabase MCP
 - [ ] **Owner smoke-test:** contacts match → Follow; Home/detail ambient piles with two accounts
 
-## Phase 5 — Decider (stub)
+## Phase 5 — Decider
 
-- [ ] Ranking model + Top 3 UX
+### Wave 1 — ranking Edge + Setup → Results UX
+- [x] Edge Function `decider-rank` (`verify_jwt`): group taste profile, eligibility (unwatched + services union + media/genre), score weights from plan.md, Top N for shuffle; batch-enrich / popular ingest when pool thin
+- [x] Client `src/lib/decider.ts` (types + invoke) + `useDeciderRank` mutation hook
+- [x] Replace `DeciderScreen`: strip Phase 4 friend-admin chrome; Setup (Tonight/Decide hero, avatar multi-select self+following, Movie/TV/Both + genre chips, Decide CTA) → Results (#1 HeroCard + #2/#3 PosterCards, why-picked, IMDb/RT, service badges, FriendPile, Shuffle, title deep-link)
+- [x] Setup UX: wrap genre chips (no horizontal scroll); pin “Find tonight's picks” above tab bar (`spacing.navContent` footer)
+- [x] Service labels via `service_catalog.tmdb_provider_id` (keyword `matchServices` fallback on Edge)
+- [x] Update `plan.md` Phase 5 status note (Wave 1 on branch; pending smoke-test) — do **not** mark Phase 5 complete until exit criteria met
+- [x] Verify: `tsc`, `expo lint`, `expo export --platform ios`
+- [ ] **Owner smoke-test:** solo + with friend; filters; shuffle; empty cold-start copy; confirm Edge secrets TMDB/OMDb if enrich path needed
+- [ ] **Exit criteria (pending):** correct on-service Top 3 for real friend/rating data with why-picked + ratings + service label
 
 ## Phase 6 — Polish & release (stub)
 

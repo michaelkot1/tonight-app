@@ -19,8 +19,11 @@ export const routes = {
   tabs: asHref('/(tabs)'),
   /** Search screen, pushed from the Home header (hidden tab). */
   search: asHref('/(tabs)/search'),
-  /** Title detail screen (hidden tab). */
-  title: (id: string): Href => asHref(`/(tabs)/title/${id}`),
+  /**
+   * Title detail — root Stack screen above `(tabs)`, so Back returns to the
+   * tab that pushed it (e.g. Decider Results) instead of resetting to Home.
+   */
+  title: (id: string): Href => asHref(`/title/${id}`),
   /** Friends management (hidden tab), from Profile. */
   friends: asHref('/(tabs)/friends'),
   /** Deep-link invite accept route (outside tab bar). */
