@@ -39,25 +39,77 @@ function useProfileUserId(): string | undefined {
   return useAuth().user?.id;
 }
 
-/** Update the handle (unique, 3–20 chars of [a-z0-9_]). Assumes availability checked. */
+export interface UpdateHandleInput {
+  handle: string;
+  /**
+   * DiceBear PNG URL, or `null` to clear (letter monogram default).
+   * Overwrites any prior OAuth `avatar_url` on Continue.
+   */
+  avatarUrl: string | null;
+}
+
+/** Update handle + avatar together. Assumes handle availability checked. */
 export function useUpdateHandle() {
   const userId = useProfileUserId();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (handle: string) => {
+    mutationFn: async ({ handle, avatarUrl }: UpdateHandleInput) => {
       const supabase = getSupabase();
       if (!supabase || !userId) throw new Error('Not signed in');
 
       const { data, error } = await supabase
         .from('profiles')
-        .update({ handle })
+        .update({ handle, avatar_url: avatarUrl })
         .eq('id', userId)
         .select('*')
         .single();
 
       if (error) throw error;
       return data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(profileQueryKey(userId), data);
+    },
+  });
+}
+
+/** Update only `avatar_url` (letter → null, glass → DiceBear PNG URL). */
+export function useUpdateAvatar() {
+  const userId = useProfileUserId();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (avatarUrl: string | null) => {
+      const supabase = getSupabase();
+      if (!supabase || !userId) throw new Error('Not signed in');
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', userId)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onMutate: async (avatarUrl) => {
+      const key = profileQueryKey(userId);
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<Profile>(key);
+      if (previous) {
+        queryClient.setQueryData<Profile>(key, {
+          ...previous,
+          avatar_url: avatarUrl,
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _avatarUrl, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(profileQueryKey(userId), context.previous);
+      }
     },
     onSuccess: (data) => {
       queryClient.setQueryData(profileQueryKey(userId), data);
