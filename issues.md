@@ -51,3 +51,17 @@ Client gate is sufficient for Phase 2. Optional follow-up: update the RPC to `wh
 
 None required for Phase 2. Consider RPC hardening when wiring handle edits from Profile.
 
+---
+
+## ISSUE-003 — Signup fails: "Error sending confirmation email"
+
+- Status: unresolved (owner SMTP config)
+- Location: Supabase Auth → custom SMTP; surfaces on client Create account (`signUpWithEmail`)
+- Problem: After Create account, API returns error sending confirmation email; confirm-code screen never opens.
+- Suspected cause: Custom SMTP credentials are invalid. Auth logs show `535 "Authentication credentials invalid"` on `POST /signup` (`user_confirmation_requested`, status 500). Successful earlier sends used default `noreply@mail.app.supabase.io`; failures started after custom SMTP was enabled.
+- Attempts:
+  - Attempt 1: Queried `auth_logs` for recent signup failures.
+    - Result: Confirmed SMTP 535 auth failure (not app/OTP route bug).
+- Current status: SMTP auth fixed (Resend accepts mail). New issue: message appears in Resend but not in Yahoo inbox (`kotmichael7@yahoo.com`) — deliverability / spam filtering, not app code. OTP template content is correct.
+- Next step: In Resend check that email’s status (Delivered / Bounced / Delayed). Check Yahoo Spam/Junk. Confirm SPF + DKIM + DMARC all verified for `tonight-app.org` in Resend. Test delivery to Gmail. App can accept the 6-digit code even if mail is only visible in Resend for now.
+

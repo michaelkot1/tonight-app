@@ -69,11 +69,13 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
     const group = segments[0] as string | undefined;
     const inAuth = group === '(auth)';
     const inOnboarding = group === '(onboarding)';
+    // Allow `/invite/[code]` to mount long enough to stash / accept before redirect.
+    const inInvite = group === 'invite';
 
     if (!session) {
-      if (!inAuth) router.replace(routes.auth);
+      if (!inAuth && !inInvite) router.replace(routes.auth);
     } else if (onboardedAt == null) {
-      if (!inOnboarding) router.replace(routes.onboarding.services);
+      if (!inOnboarding && !inInvite) router.replace(routes.onboarding.services);
     } else if (inAuth || inOnboarding) {
       router.replace(routes.tabs);
     }
@@ -93,6 +95,7 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(onboarding)" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="invite/[code]" />
     </Stack>
   );
 }

@@ -1,7 +1,7 @@
 # PLAN.md — Tonight (phased build plan)
 
 > Working proposal from the orchestrator. Companion docs: [`spec.md`](spec.md), [`design.md`](design.md), [`AGENTS.md`](AGENTS.md).
-> Status: **Phase 3 client complete on `cursor/phase-3-titles-home` (uncommitted; pending owner Edge Function secrets + smoke-test). Phase 2 auth foundation on `cursor/phase-2-auth-onboarding`. Apple/Google OAuth + notifications OS prompt + contacts deferred. Phase 1 + Phase 0 done.**
+> Status: **Phase 4 Wave 1 complete on `cursor/phase-4-friends-invites` (uncommitted; pending owner two-account smoke-test). Contacts + ambient friend piles = Wave 2. Phase 3 client complete (pending owner TMDB/OMDb Edge secrets). Apple/Google OAuth + notifications OS prompt deferred. Phase 1 + Phase 0 done.**
 
 This plan is intentionally phased and top-down. Each phase produces reviewable, mergeable work on a feature branch (never `main`). Exploration → `scout`, implementation → `implementer`, review → orchestrator (main agent).
 
@@ -131,6 +131,30 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 - Follow (one-way) management; friends surface in feed + Decider.
 
 **Exit:** Two accounts can connect via each path; follows drive visibility.
+
+**Status (2026-09-10):** 🟢 **Wave 1 implemented** on `cursor/phase-4-friends-invites` (uncommitted).
+- RPC `create_or_get_my_invite()` + unique `invites.inviter_id`; hooks for invite/follow/search; SecureStore pending-code flush on session; `/invite/[code]` deep link; onboarding invite uses real codes; Profile → Friends (share + @search + following/unfollow).
+- Verify: `tsc`, `expo lint`, `expo export --platform ios` clean.
+- **Owner smoke-test:** two accounts connect via invite link + via @handle follow.
+- Wave 2 still open: contacts match Edge Function, Home friend piles.
+
+**Orchestrator locks (2026-09-10):**
+- **Branch:** `cursor/phase-4-friends-invites` from `cursor/phase-3-titles-home`.
+- **Invite codes:** Durable **one reusable code per user** via SECURITY DEFINER RPC `create_or_get_my_invite()` (insert if none; return existing). `accept_invite` already mutual-follows on every valid accept — keep that. No expiry for MVP (`expires_at` null).
+- **Deep link:** `tonight://invite/{code}` → route `invite/[code]` (outside tab bar). If logged out / mid-onboarding, stash code in SecureStore and call `accept_invite` once a session exists (does not require handle/`onboarded_at`).
+- **@search + follow:** Client queries `profiles` by handle prefix; one-way follow = INSERT/DELETE on `follows` (RLS). No follow-request friction.
+- **Friends UX home:** Profile → Friends screen (hidden route, same pattern as search). Share invite + @search + Following list + unfollow. No new tab.
+- **Decider:** Phase 4 only exposes `useFollowing` (and mutuals if cheap); Decider picker stays Phase 5.
+- **Feed ambient piles:** Deferred to **Wave 2** (query followed users’ ratings → `friendPile` / `socialLine`). Wave 1 = graph plumbing + invite + Profile friends.
+- **Contacts match:** Deferred to **Wave 2** — needs Edge Function (service role vs `auth.users` emails); `profiles` has no email/phone. Aligns with Phase 2 owner deferral.
+- **Share:** Keep RN `Share` (no new clipboard package in Wave 1).
+- **Backend:** Prefer Supabase MCP `apply_migration` + regenerate `database.types.ts`; no new Edge Function for Wave 1.
+
+**Status (2026-09-10):** 🟢 **Wave 1 implemented** on `cursor/phase-4-friends-invites` (uncommitted; pending owner smoke-test).
+- Backend: `create_or_get_my_invite()` SECURITY DEFINER RPC + unique `inviter_id`; existing `accept_invite` kept for mutual follows.
+- Client: friends hooks, pending-invite SecureStore flush, `/invite/[code]` route, Friends screen from Profile, real onboarding invite share.
+- Verify: `tsc`, `expo lint`, `expo export --platform ios` clean.
+- Wave 2 still deferred: contacts match, Home friend piles / socialLine.
 
 ## Phase 5 — The Decider (core feature)
 

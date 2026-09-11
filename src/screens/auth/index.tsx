@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -12,11 +13,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/button';
 import { TextInput } from '@/components/text-input';
 import { ThemedText } from '@/components/themed-text';
+import { routes } from '@/lib/routes';
 import { useAuth } from '@/providers/auth-provider';
 import { colors, radius, spacing } from '@/theme';
 
 type Mode = 'signIn' | 'signUp';
-type Step = 'credentials' | 'checkEmail';
 
 // TODO(oauth): Wire native Apple (expo-apple-authentication) + Google
 // (expo-auth-session) sign-in. Handlers below are intentional no-op stubs so the
@@ -30,19 +31,13 @@ function handleGoogleSignIn() {
 
 export function AuthScreen() {
   const insets = useSafeAreaInsets();
-  const {
-    isConfigured,
-    signInWithEmail,
-    signUpWithEmail,
-    resendConfirmationEmail,
-  } = useAuth();
+  const router = useRouter();
+  const { isConfigured, signInWithEmail, signUpWithEmail } = useAuth();
 
   const [mode, setMode] = useState<Mode>('signIn');
-  const [step, setStep] = useState<Step>('credentials');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const isSignUp = mode === 'signUp';
@@ -56,7 +51,6 @@ export function AuthScreen() {
   async function handleSubmit() {
     if (!canSubmit) return;
     setError(null);
-    setInfo(null);
     setSubmitting(true);
 
     if (isSignUp) {
@@ -68,8 +62,7 @@ export function AuthScreen() {
         return;
       }
       if (needsEmailConfirmation) {
-        setStep('checkEmail');
-        setInfo(null);
+        router.push(routes.confirmEmail(trimmedEmail));
       }
       // If a session was returned (confirm-email off), the root guard redirects.
       return;
@@ -79,87 +72,17 @@ export function AuthScreen() {
     setSubmitting(false);
     if (!authError) return;
 
-    // Unconfirmed accounts can't sign in — point them back to their inbox.
+    // Unconfirmed accounts can't sign in — send them to enter the OTP.
     if (/not confirmed|confirm/i.test(authError)) {
-      setStep('checkEmail');
-      setError(null);
-      setInfo('Please confirm your email first — check your inbox.');
+      router.push(routes.confirmEmail(trimmedEmail));
       return;
     }
     setError(authError);
   }
 
-  async function handleResend() {
-    if (!isConfigured || !trimmedEmail || submitting) return;
-    setError(null);
-    setSubmitting(true);
-    const { error: resendError } = await resendConfirmationEmail(trimmedEmail);
-    setSubmitting(false);
-    if (resendError) {
-      setError(resendError);
-      return;
-    }
-    setInfo(`New confirmation email sent to ${trimmedEmail}.`);
-  }
-
   function toggleMode() {
     setMode(isSignUp ? 'signIn' : 'signUp');
-    setStep('credentials');
     setError(null);
-    setInfo(null);
-  }
-
-  function backToCredentials() {
-    setStep('credentials');
-    setError(null);
-    setInfo(null);
-  }
-
-  if (step === 'checkEmail') {
-    return (
-      <View style={[styles.root, styles.centered]}>
-        <View
-          style={[
-            styles.checkEmail,
-            { paddingTop: insets.top + spacing.header },
-          ]}
-        >
-          <ThemedText variant="heroTitle">Check your email</ThemedText>
-          <ThemedText variant="metadata">
-            We sent a confirmation link to {trimmedEmail}. Tap it on this device
-            and we&apos;ll bring you right back to finish setting up.
-          </ThemedText>
-          {info ? (
-            <ThemedText variant="caption" style={styles.infoText}>
-              {info}
-            </ThemedText>
-          ) : null}
-          {error ? (
-            <ThemedText variant="caption" style={styles.errorText}>
-              {error}
-            </ThemedText>
-          ) : null}
-          <View style={styles.form}>
-            <Button
-              label="Resend confirmation email"
-              variant="secondary"
-              onPress={handleResend}
-              disabled={!isConfigured || submitting}
-              loading={submitting}
-            />
-            <Pressable
-              accessibilityRole="button"
-              onPress={backToCredentials}
-              style={styles.toggle}
-            >
-              <ThemedText variant="caption" style={styles.toggleText}>
-                Use a different email
-              </ThemedText>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    );
   }
 
   return (
@@ -275,13 +198,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
-  centered: {
-    justifyContent: 'center',
-  },
-  checkEmail: {
-    paddingHorizontal: spacing.inset,
-    gap: spacing.lg,
-  },
   content: {
     paddingHorizontal: spacing.inset,
     gap: spacing.rail,
@@ -321,12 +237,6 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: spacing.lg,
-  },
-  infoText: {
-    color: colors.textPrimary,
-  },
-  errorText: {
-    color: colors.accent,
   },
   toggle: {
     alignItems: 'center',

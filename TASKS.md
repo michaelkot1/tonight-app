@@ -1,6 +1,6 @@
 # TASKS.md — Tonight
 
-Active milestone: **Phase 3 — Titles, rating gesture & Home** on `cursor/phase-3-titles-home` (base: `cursor/phase-2-auth-onboarding`)
+Active milestone: **Phase 4 — Friends & invites** on `cursor/phase-4-friends-invites` (base: `cursor/phase-3-titles-home`)
 
 Work on feature branches (`cursor/...`), never directly on `main`. Companion docs: `plan.md`, `spec.md`, `design.md`.
 
@@ -62,10 +62,23 @@ Work on feature branches (`cursor/...`), never directly on `main`. Companion doc
 - [x] Verify: `tsc`, `expo lint`, `expo export --platform ios` clean; Edge Functions deployed via Supabase MCP
 - [ ] **Owner (secrets):** set Supabase Edge Function secrets `TMDB_READ_ACCESS_TOKEN` (or `TMDB_API_KEY`) + `OMDB_API_KEY` so `tmdb-*` return live data
 
-## Phase 4 — Friends & invites (stub)
+## Phase 4 — Friends & invites
 
-- [ ] Invites, follows, social graph
-- [ ] Real per-user invite codes + contacts match (from Phase 2 deferral)
+### Wave 1 — invite path + graph + Profile friends
+- [x] Migration RPC `create_or_get_my_invite()` (durable reusable code per user; `expires_at` null)
+- [x] Regenerate / update `src/lib/database.types.ts` for new RPC
+- [x] Hooks: `useMyInvite`, `useAcceptInvite`, `useFollow` / `useUnfollow`, `useFollowing`, `useSearchProfiles` (TanStack; mirror `use-profile` / `use-titles`)
+- [x] Pending invite code in SecureStore + flush `accept_invite` once session exists
+- [x] Deep-link route `invite/[code]` + `routes.invite` / `routes.friends`
+- [x] Replace onboarding invite placeholder with real `useMyInvite` + Share URL
+- [x] Friends screen (from Profile): share invite, @handle search → follow, Following list → unfollow
+- [x] Profile entry point → Friends
+- [x] Verify: `tsc`, `expo lint`, `expo export --platform ios` clean
+
+### Wave 2 — contacts + ambient feed (after Wave 1)
+- [ ] Contacts match Edge Function + `expo-contacts` (permission copy) — deferred identity match vs `auth.users`
+- [ ] Home/detail: friend piles / social lines from followed ratings
+- [ ] Optional: clipboard copy-link polish
 
 ## Phase 5 — Decider (stub)
 

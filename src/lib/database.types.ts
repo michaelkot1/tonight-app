@@ -289,6 +289,7 @@ export type Database = {
     }
     Functions: {
       accept_invite: { Args: { invite_code: string }; Returns: string }
+      create_or_get_my_invite: { Args: never; Returns: string }
       is_following: { Args: { target_id: string }; Returns: boolean }
       is_handle_available: { Args: { candidate: string }; Returns: boolean }
     }
