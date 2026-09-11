@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -17,7 +18,7 @@ export function ServiceGrid({ selected, onToggle, disabled = false }: ServiceGri
 
   return (
     <View style={styles.grid}>
-      {SERVICE_CATALOG.map(({ service, displayName }) => {
+      {SERVICE_CATALOG.map(({ service, displayName, logo }) => {
         const isSelected = selectedSet.has(service);
         return (
           <Pressable
@@ -33,8 +34,14 @@ export function ServiceGrid({ selected, onToggle, disabled = false }: ServiceGri
               pressed && !disabled && styles.pressed,
             ]}
           >
-            {/* Logo assets aren't available yet — reserve a spot for an icon. */}
-            <View style={styles.iconSlot} />
+            <View style={styles.iconSlot}>
+              <Image
+                source={logo}
+                style={styles.icon}
+                contentFit="contain"
+                accessibilityLabel={displayName}
+              />
+            </View>
             <ThemedText
               variant="cardTitle"
               numberOfLines={1}
@@ -83,6 +90,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     borderCurve: 'continuous',
     backgroundColor: colors.shell,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  icon: {
+    width: 36,
+    height: 36,
   },
   labelIdle: {
     color: colors.textPrimary,

@@ -1,3 +1,5 @@
+import type { ImageSource } from 'expo-image';
+
 import type { Enums } from '@/lib/database.types';
 
 export type StreamingService = Enums<'streaming_service'>;
@@ -5,22 +7,55 @@ export type StreamingService = Enums<'streaming_service'>;
 export interface ServiceCatalogEntry {
   service: StreamingService;
   displayName: string;
+  logo: ImageSource;
 }
 
 /**
  * The 8 supported streaming services, mirroring the seeded `service_catalog` table.
  * Kept static (the enum + display names are fixed) so onboarding can render without
- * a round-trip. Logo assets aren't available yet — tiles leave a spot for an icon.
+ * a round-trip. Logos live under `assets/images/streaming/` keyed by service id.
  */
 export const SERVICE_CATALOG: ServiceCatalogEntry[] = [
-  { service: 'netflix', displayName: 'Netflix' },
-  { service: 'max', displayName: 'Max' },
-  { service: 'disney_plus', displayName: 'Disney+' },
-  { service: 'prime_video', displayName: 'Prime Video' },
-  { service: 'hulu', displayName: 'Hulu' },
-  { service: 'apple_tv_plus', displayName: 'Apple TV+' },
-  { service: 'peacock', displayName: 'Peacock' },
-  { service: 'paramount_plus', displayName: 'Paramount+' },
+  {
+    service: 'netflix',
+    displayName: 'Netflix',
+    logo: require('@/assets/images/streaming/netflix.png'),
+  },
+  {
+    service: 'max',
+    displayName: 'Max',
+    logo: require('@/assets/images/streaming/max.jpg'),
+  },
+  {
+    service: 'disney_plus',
+    displayName: 'Disney+',
+    logo: require('@/assets/images/streaming/disney_plus.png'),
+  },
+  {
+    service: 'prime_video',
+    displayName: 'Prime Video',
+    logo: require('@/assets/images/streaming/prime_video.png'),
+  },
+  {
+    service: 'hulu',
+    displayName: 'Hulu',
+    logo: require('@/assets/images/streaming/hulu.png'),
+  },
+  {
+    service: 'apple_tv_plus',
+    displayName: 'Apple TV+',
+    logo: require('@/assets/images/streaming/apple_tv_plus.png'),
+  },
+  {
+    service: 'peacock',
+    displayName: 'Peacock',
+    logo: require('@/assets/images/streaming/peacock.png'),
+  },
+  {
+    service: 'paramount_plus',
+    displayName: 'Paramount+',
+    logo: require('@/assets/images/streaming/paramount_plus.jpg'),
+  },
 ];
 
 /** Human display name for a service enum value. */
