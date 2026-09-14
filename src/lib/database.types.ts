@@ -241,6 +241,7 @@ export type Database = {
           providers_fetched_at: string | null
           release_date: string | null
           rt_rating: number | null
+          runtime: number | null
           title: string
           tmdb_id: number
           tmdb_popularity: number | null
@@ -264,6 +265,7 @@ export type Database = {
           providers_fetched_at?: string | null
           release_date?: string | null
           rt_rating?: number | null
+          runtime?: number | null
           title: string
           tmdb_id: number
           tmdb_popularity?: number | null
@@ -287,6 +289,7 @@ export type Database = {
           providers_fetched_at?: string | null
           release_date?: string | null
           rt_rating?: number | null
+          runtime?: number | null
           title?: string
           tmdb_id?: number
           tmdb_popularity?: number | null
@@ -331,6 +334,15 @@ export type Database = {
       create_or_get_my_invite: { Args: never; Returns: string }
       is_following: { Args: { target_id: string }; Returns: boolean }
       is_handle_available: { Args: { candidate: string }; Returns: boolean }
+      match_profiles_by_emails: {
+        Args: { p_emails: string[] }
+        Returns: {
+          avatar_url: string
+          display_name: string
+          handle: string
+          id: string
+        }[]
+      }
     }
     Enums: {
       media_type: "movie" | "tv"

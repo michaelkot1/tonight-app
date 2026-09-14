@@ -55,6 +55,8 @@ interface TmdbDetails {
   backdrop_path?: string | null;
   release_date?: string;
   first_air_date?: string;
+  runtime?: number | null;
+  episode_run_time?: number[];
   vote_average?: number;
   popularity?: number;
   imdb_id?: string | null;
@@ -216,6 +218,17 @@ Deno.serve(async (req: Request) => {
   const imdbId = details.external_ids?.imdb_id ?? details.imdb_id ?? null;
   const { imdb, rt } = imdbId ? await fetchOmdb(imdbId) : { imdb: null, rt: null };
 
+  // Runtime in minutes: movies expose `runtime`; TV exposes `episode_run_time[]`.
+  let runtime: number | null = null;
+  if (mediaType === 'movie') {
+    runtime = typeof details.runtime === 'number' && details.runtime > 0 ? details.runtime : null;
+  } else {
+    const epRuntime = Array.isArray(details.episode_run_time)
+      ? details.episode_run_time.find((n) => typeof n === 'number' && n > 0)
+      : undefined;
+    runtime = typeof epRuntime === 'number' ? epRuntime : null;
+  }
+
   const row = {
     tmdb_id: tmdbId,
     media_type: mediaType,
@@ -224,6 +237,7 @@ Deno.serve(async (req: Request) => {
     poster_path: details.poster_path ?? null,
     backdrop_path: details.backdrop_path ?? null,
     release_date: nullableDate(details.release_date ?? details.first_air_date),
+    runtime,
     genres,
     top_cast: topCast,
     director,
