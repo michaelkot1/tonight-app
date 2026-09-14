@@ -48,6 +48,7 @@ export const titleSearchQueryKey = (query: string) => ['title-search', query] as
 export const popularTitlesQueryKey = (mediaType: PopularMediaFilter) =>
   ['popular-titles', mediaType] as const;
 export const myRatingsQueryKey = (userId: string | undefined) => ['my-ratings', userId] as const;
+export const mySavesQueryKey = (userId: string | undefined) => ['my-saves', userId] as const;
 
 /** Debounce a rapidly-changing value (search box keystrokes). */
 export function useDebouncedValue<T>(value: T, delay = SEARCH_DEBOUNCE_MS): T {
@@ -216,6 +217,102 @@ export function useRateTitle() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: myRatingsQueryKey(user?.id) });
+    },
+  });
+}
+
+/** A save joined with the poster fields needed to render it in a list. */
+export interface MySave {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  title: Pick<
+    Tables<'titles'>,
+    | 'id'
+    | 'title'
+    | 'media_type'
+    | 'poster_path'
+    | 'genres'
+    | 'tmdb_rating'
+    | 'imdb_rating'
+    | 'release_date'
+  > | null;
+}
+
+/** The signed-in user's saves, newest first, joined with title poster fields. */
+export function useMySaves(): UseQueryResult<MySave[]> {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: mySavesQueryKey(user?.id),
+    enabled: !!user?.id,
+    queryFn: async (): Promise<MySave[]> => {
+      const supabase = getSupabase();
+      if (!supabase || !user?.id) return [];
+      const { data, error } = await supabase
+        .from('saves')
+        .select(
+          'id, created_at, updated_at, title:titles(id, title, media_type, poster_path, genres, tmdb_rating, imdb_rating, release_date)',
+        )
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as MySave[];
+    },
+  });
+}
+
+interface ToggleSaveInput {
+  titleId: string;
+  /** When set, forces save (`true`) or unsave (`false`). Otherwise toggles. */
+  saved?: boolean;
+}
+
+/**
+ * Insert or delete the signed-in user's save for a title. Upserts on the
+ * `(user_id, title_id)` unique constraint when saving; deletes when unsaving.
+ * Invalidates the affected `my-saves` cache on success.
+ */
+export function useToggleSave() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ titleId, saved }: ToggleSaveInput) => {
+      const supabase = getSupabase();
+      if (!supabase || !user?.id) throw new Error('Not signed in');
+      const userId = user.id;
+
+      let nextSaved = saved;
+      if (nextSaved === undefined) {
+        const { data: existing, error: lookupError } = await supabase
+          .from('saves')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('title_id', titleId)
+          .maybeSingle();
+        if (lookupError) throw lookupError;
+        nextSaved = !existing;
+      }
+
+      if (!nextSaved) {
+        const { error } = await supabase
+          .from('saves')
+          .delete()
+          .eq('user_id', userId)
+          .eq('title_id', titleId);
+        if (error) throw error;
+        return { titleId, saved: false } as const;
+      }
+
+      const { error } = await supabase.from('saves').upsert(
+        { user_id: userId, title_id: titleId, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id,title_id' },
+      );
+      if (error) throw error;
+      return { titleId, saved: true } as const;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: mySavesQueryKey(user?.id) });
     },
   });
 }

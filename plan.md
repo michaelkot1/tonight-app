@@ -1,7 +1,7 @@
 # PLAN.md — Tonight (phased build plan)
 
 > Working proposal from the orchestrator. Companion docs: [`spec.md`](spec.md), [`design.md`](design.md), [`AGENTS.md`](AGENTS.md).
-> Status: **Saved tab UI shell on `cursor/saved-tab` (placeholder empty-state; no persistence). Browse tab UI shell carried from `cursor/browse-tab`. Visible tabs `Home → Decide FAB → Search` (Saved/Profile/Friends hidden from tab bar). Phase 5 Wave 1 on `cursor/phase-5-decider` (pending owner smoke-test). Phase 4 Wave 1 + Wave 2 on `cursor/phase-4-friends-invites`. Phase 3 client complete (pending owner TMDB/OMDb Edge secrets). Apple/Google OAuth + notifications OS prompt deferred. Phase 1 + Phase 0 done.**
+> Status: **Saved bookmarks on `cursor/bookmarks-saved` (`saves` table + Saved list + title bookmark affordances). Browse tab UI shell carried from `cursor/browse-tab`. Visible tabs `Home → Decide FAB → Search` (Saved/Profile/Friends hidden from tab bar). Phase 5 Wave 1 on `cursor/phase-5-decider` (pending owner smoke-test). Phase 4 Wave 1 + Wave 2 on `cursor/phase-4-friends-invites`. Phase 3 client complete (pending owner TMDB/OMDb Edge secrets). Apple/Google OAuth + notifications OS prompt deferred. Phase 1 + Phase 0 done.**
 
 This plan is intentionally phased and top-down. Each phase produces reviewable, mergeable work on a feature branch (never `main`). Exploration → `scout`, implementation → `implementer`, review → orchestrator (main agent).
 
@@ -174,9 +174,9 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 
 **Status:** ✅ UI shell on `cursor/browse-tab` (carried on `cursor/saved-tab`). Visible tabs `Home → Decide FAB → Search` (route still `browse`; Saved/Profile/Friends hidden from tab bar). Search field pushes `routes.search`; genre chips local-select only; category cards pressable stubs (no feeds yet). Supersedes Phase 3 “no 4th tab” for this surface.
 
-## Saved tab (UI shell)
+## Saved tab
 
-**Status:** ✅ UI shell on `cursor/saved-tab`. Placeholder empty-state only (bookmark icon + copy). No save affordances on titles, no persistence, no data wiring yet.
+**Status:** ✅ Persistence + UI on `cursor/bookmarks-saved`. `public.saves` (self-only RLS); hooks `useMySaves` / `useToggleSave`; bookmark on title detail, posters, hero, search rows, decider picks; Saved screen Movies | TV (newest-first). Tab stays hidden from tab bar (`href: null`); Home header entry remains.
 
 ## Phase 6 — Polish, notifications & release prep
 

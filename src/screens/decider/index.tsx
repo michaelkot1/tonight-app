@@ -13,6 +13,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
+import { SaveControl } from '@/components/bookmark-button';
 import { Chip } from '@/components/chip';
 import { FriendPile } from '@/components/friend-pile';
 import { HeroCard } from '@/components/hero-card';
@@ -455,6 +456,7 @@ export function DeciderScreen() {
                         friendPile={
                           social ? <FriendPile friends={social.pile} /> : undefined
                         }
+                        action={<SaveControl titleId={hero.id} size="sm" chip />}
                         onPress={() => openTitle(hero.id)}
                         onWatch={() => openTitle(hero.id)}
                       />
@@ -487,6 +489,7 @@ export function DeciderScreen() {
                             friendPile={
                               social ? <FriendPile friends={social.pile} /> : undefined
                             }
+                            action={<SaveControl titleId={pick.id} size="sm" chip />}
                             onPress={() => openTitle(pick.id)}
                           />
                           <ThemedText variant="caption" numberOfLines={2} style={styles.whyLine}>

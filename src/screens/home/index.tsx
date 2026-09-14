@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { SaveControl } from '@/components/bookmark-button';
 import { FriendPile } from '@/components/friend-pile';
 import { HeroCard } from '@/components/hero-card';
 import { PosterCard } from '@/components/poster-card';
@@ -177,6 +178,7 @@ export function HomeScreen() {
             friendPile={
               pickSocial ? <FriendPile friends={pickSocial.pile} /> : undefined
             }
+            action={<SaveControl titleId={pick.id} size="sm" chip />}
             onPress={() => openTitle(pick.id)}
             onWatch={() => openTitle(pick.id)}
           />
@@ -207,6 +209,7 @@ export function HomeScreen() {
                 friendPile={
                   social ? <FriendPile friends={social.pile} /> : undefined
                 }
+                action={<SaveControl titleId={item.id} size="sm" chip />}
                 onPress={() => openTitle(item.id)}
               />
             );
@@ -230,6 +233,7 @@ export function HomeScreen() {
                 friendPile={
                   social ? <FriendPile friends={social.pile} /> : undefined
                 }
+                action={<SaveControl titleId={item.title.id} size="sm" chip />}
                 onPress={() => openTitle(item.title.id)}
               />
             );
@@ -252,6 +256,7 @@ export function HomeScreen() {
                 friendPile={
                   social ? <FriendPile friends={social.pile} /> : undefined
                 }
+                action={<SaveControl titleId={item.id} size="sm" chip />}
                 onPress={() => openTitle(item.id)}
               />
             );
