@@ -6,7 +6,8 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import type { Tables } from '@/lib/database.types';
+import type { BrowseCategory, CategoryFeed } from '@/lib/categories';
+import type { Json, Tables } from '@/lib/database.types';
 import { invokeEdgeFunction } from '@/lib/edge';
 import { getSupabase } from '@/lib/supabase';
 import { isTitleEnriched, type MediaType, type Title, type Verdict } from '@/lib/titles';
@@ -23,6 +24,10 @@ export interface TitleSearchResult {
   release_date: string | null;
   tmdb_rating: number | null;
   overview: string | null;
+  /** Present on `tmdb-popular` category feeds (optional for other consumers). */
+  genres?: Json;
+  /** Present on `tmdb-popular` category feeds (optional for other consumers). */
+  runtime?: number | null;
 }
 
 interface TmdbSearchResponse {
@@ -98,6 +103,84 @@ export function usePopularTitles(
         { media_type: PopularMediaFilter }
       >('tmdb-popular', { media_type: mediaType });
       return response.results ?? [];
+    },
+  });
+}
+
+export const categoryFeedQueryKey = (slug: string) => ['category-feed', slug] as const;
+
+/**
+ * Fallback for `useCategoryFeed`: read straight from the cached `titles` table
+ * (RLS is select-only, so this is allowed) when the Edge Function is
+ * unavailable or returns nothing. Ordered by TMDB popularity.
+ */
+async function fetchCachedCategoryTitles(
+  category: BrowseCategory,
+): Promise<TitleSearchResult[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  let query = supabase
+    .from('titles')
+    .select(
+      'id, tmdb_id, media_type, title, poster_path, backdrop_path, release_date, tmdb_rating, overview, genres, runtime',
+    );
+
+  if (category.media && category.media !== 'all') {
+    query = query.eq('media_type', category.media);
+  }
+  if (category.genreId != null) {
+    query = query.contains('genres', [{ id: category.genreId }]);
+  }
+
+  const { data, error } = await query
+    .order('tmdb_popularity', { ascending: false, nullsFirst: false })
+    .limit(24);
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    tmdb_id: row.tmdb_id,
+    media_type: row.media_type as MediaType,
+    title: row.title,
+    poster_path: row.poster_path,
+    backdrop_path: row.backdrop_path,
+    release_date: row.release_date,
+    tmdb_rating: row.tmdb_rating,
+    overview: row.overview,
+    genres: row.genres,
+    runtime: row.runtime,
+  }));
+}
+
+/**
+ * Titles for a Browse category (powers the Story viewer). Tries the
+ * `tmdb-popular` Edge Function first; if it throws (e.g. `tmdb_not_configured`)
+ * or returns no results, falls back to the cached `titles` table.
+ */
+export function useCategoryFeed(
+  category: BrowseCategory,
+): UseQueryResult<TitleSearchResult[]> {
+  return useQuery({
+    queryKey: categoryFeedQueryKey(category.slug),
+    staleTime: 1000 * 60 * 30,
+    queryFn: async (): Promise<TitleSearchResult[]> => {
+      try {
+        const response = await invokeEdgeFunction<
+          TmdbPopularResponse,
+          { feed: CategoryFeed; media_type: 'movie' | 'tv' | 'all'; genre_id: number | null }
+        >('tmdb-popular', {
+          feed: category.feed,
+          media_type: category.media ?? 'all',
+          genre_id: category.genreId ?? null,
+        });
+        if (response.results && response.results.length > 0) {
+          return response.results;
+        }
+      } catch {
+        // Edge unavailable (e.g. tmdb_not_configured) — fall through to cache.
+      }
+      return fetchCachedCategoryTitles(category);
     },
   });
 }

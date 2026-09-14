@@ -6,18 +6,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Chip } from '@/components/chip';
 import { ThemedText } from '@/components/themed-text';
+import { BROWSE_CATEGORIES } from '@/lib/categories';
 import { DECIDER_GENRE_CHIPS } from '@/lib/decider';
 import { routes } from '@/lib/routes';
 import { colors, radius, spacing } from '@/theme';
 
 import { CategoryCard } from './category-card';
-
-const CATEGORIES = [
-  'Trending Now',
-  'New Releases',
-  'Watch with Friends',
-  'Comedy Gold',
-] as const;
 
 export function BrowseScreen() {
   const insets = useSafeAreaInsets();
@@ -71,8 +65,12 @@ export function BrowseScreen() {
       </ScrollView>
 
       <View style={styles.grid}>
-        {CATEGORIES.map((label) => (
-          <CategoryCard key={label} label={label} />
+        {BROWSE_CATEGORIES.map((category) => (
+          <CategoryCard
+            key={category.slug}
+            category={category}
+            onPress={() => router.push(routes.story(category.slug))}
+          />
         ))}
       </View>
     </ScrollView>

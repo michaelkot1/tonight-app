@@ -235,3 +235,23 @@ export function releaseYear(releaseDate: string | null | undefined): string | nu
   const year = releaseDate.slice(0, 4);
   return /^\d{4}$/.test(year) ? year : null;
 }
+
+/** Human runtime label: `128` → `"2h 8m"`, `48` → `"48m"`, `60` → `"1h"`, null/0 → null. */
+export function formatRuntime(minutes: number | null | undefined): string | null {
+  if (minutes === null || minutes === undefined || minutes <= 0) return null;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours === 0) return `${mins}m`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
+
+/** Story meta line: `year · runtime · genres` (each segment omitted when empty). */
+export function formatStoryMeta(
+  title: Pick<Title, 'release_date' | 'runtime' | 'genres'>,
+): string {
+  const year = releaseYear(title.release_date);
+  const runtimeLabel = formatRuntime(title.runtime);
+  const genreMeta = formatGenreMeta(parseGenres(title.genres), 3);
+  return [year, runtimeLabel, genreMeta].filter(Boolean).join(' · ');
+}

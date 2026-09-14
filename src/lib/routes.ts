@@ -33,6 +33,11 @@ export const routes = {
    * tab that pushed it (e.g. Decider Results) instead of resetting to Home.
    */
   title: (id: string): Href => asHref(`/title/${id}`),
+  /**
+   * Category story viewer — root Stack screen above `(tabs)` (mirrors `title`),
+   * so Back returns to the Search tab that pushed it instead of resetting tabs.
+   */
+  story: (category: string): Href => asHref(`/story/${category}`),
   /** Friends management (hidden tab), from Profile. */
   friends: asHref('/(tabs)/friends'),
   /** Deep-link invite accept route (outside tab bar). */
