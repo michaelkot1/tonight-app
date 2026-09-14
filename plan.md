@@ -174,6 +174,16 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 
 **Status:** ✅ UI shell on `cursor/browse-tab` (carried on `cursor/saved-tab`). Visible tabs `Home → Decide FAB → Search` (route still `browse`; Saved/Profile/Friends hidden from tab bar). Search field pushes `routes.search`; genre chips local-select only; category cards pressable stubs (no feeds yet). Supersedes Phase 3 “no 4th tab” for this surface.
 
+### Search category stories
+
+**Status:** 🟢 Implemented on `cursor/search-stories` (from `cursor/bookmarks-saved`; pending owner smoke-test).
+- **Backend (deployed):** `tmdb-popular` extended with a `feed` (`trending` / `new` / `top_rated` / `popular` / `discover`) + `genre_id` param (backward-compatible; default `trending`/`all`) and now returns `genres` + `runtime`; `tmdb-title` enriches a new `titles.runtime` column (movie `runtime`, TV first `episode_run_time`); migration `add_runtime_to_titles`; types regenerated.
+- **Categories:** `src/lib/categories.ts` — 8 feed-backed cards shared by the Browse grid + Story viewer (Trending Now, New Releases, Critically Acclaimed, Popular Now, Comedy Gold, Chills & Thrills, Sci-Fi & Beyond, Date Night). `CategoryCard` reworked (icon + label + blurb) and pushes `routes.story(slug)`.
+- **Feed hook:** `useCategoryFeed` calls `tmdb-popular`; on error (`tmdb_not_configured`) or empty, falls back to a cached-`titles` query (genre/media filtered, popularity-ordered) so cards populate from the ~198 cached rows even without TMDB secrets.
+- **Story viewer:** `src/app/story/[category].tsx` + `src/screens/story/*` — full-screen root Stack route. Segmented Reanimated progress bar (one bar per title, 5s linear fill, auto-advance; auto-closes after the last). Full-bleed `expo-image` art + gradient scrims. Right tap → next, left tap → restart-or-previous (Instagram rule), hold-anywhere → pause with “Paused” hint (focus-blur pauses silently). Bottom overlay: gold rating, hero title, `year · runtime · genres`, synopsis, where-to-watch chips (from enriched providers), **View details** pill → `routes.title(id)`, and the ember `SaveControl` bookmark. Best-effort ArrowLeft/Right/Escape on web.
+- **Verify:** `tsc`, `expo lint`, `expo export --platform ios` all clean.
+- **Depends on (owner):** same Edge secrets as Phase 3/5 (`TMDB_READ_ACCESS_TOKEN`/`TMDB_API_KEY` + `OMDB_API_KEY`) for live feeds + runtime/provider enrichment; without them stories fall back to cached titles and omit runtime/where-to-watch until enriched.
+
 ## Saved tab
 
 **Status:** ✅ Persistence + UI on `cursor/bookmarks-saved`. `public.saves` (self-only RLS); hooks `useMySaves` / `useToggleSave`; bookmark on title detail, posters, hero, search rows, decider picks; Saved screen Movies | TV (newest-first). Tab stays hidden from tab bar (`href: null`); Home header entry remains.
