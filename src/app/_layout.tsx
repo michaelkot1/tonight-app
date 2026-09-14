@@ -95,6 +95,7 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(onboarding)" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="search" />
       <Stack.Screen name="title/[id]" />
       <Stack.Screen name="invite/[code]" />
     </Stack>

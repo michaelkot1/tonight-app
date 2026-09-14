@@ -27,6 +27,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="browse"
+        options={{
+          title: 'Browse',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="compass" size={size ?? 24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="decider"
         options={{
           title: 'Decide',
@@ -34,6 +43,15 @@ export default function TabsLayout() {
           tabBarIcon: () => null,
           tabBarButton: ({ onPress, accessibilityState }) => (
             <DeciderFab onPress={onPress} accessibilityState={accessibilityState} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="saved"
+        options={{
+          title: 'Saved',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="bookmark-outline" size={size ?? 24} color={color} />
           ),
         }}
       />
@@ -46,9 +64,9 @@ export default function TabsLayout() {
           ),
         }}
       />
-      {/* Hidden from the tab bar — reached via Home / Profile pushes. */}
-      <Tabs.Screen name="search" options={{ href: null }} />
+      {/* Hidden from the tab bar — reached via Profile push. */}
       <Tabs.Screen name="friends" options={{ href: null }} />
+
     </Tabs>
   );
 }
