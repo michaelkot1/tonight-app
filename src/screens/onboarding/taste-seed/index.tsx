@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { OnboardingScaffold } from '@/components/onboarding-scaffold';
+import { SaveControl } from '@/components/bookmark-button';
 import { RatingControl } from '@/components/rating-control';
 import { ThemedText } from '@/components/themed-text';
 import { useRateTitle, usePopularTitles, type TitleSearchResult } from '@/hooks/use-titles';
@@ -126,6 +127,7 @@ function SeedRow({
             </ThemedText>
           ) : null}
         </View>
+        <SaveControl titleId={title.id} size="sm" />
       </View>
       <RatingControl value={value} onChange={onChange} disabled={disabled} />
     </View>

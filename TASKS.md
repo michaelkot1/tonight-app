@@ -100,10 +100,10 @@ Work on feature branches (`cursor/...`), never directly on `main`. Companion doc
 - [x] Visible Search tab (`Home → Decide FAB → Search`; route still `browse`; Saved/Profile/Friends hidden): search → `routes.search`, genre chips (local select), 2×2 category cards — on `cursor/browse-tab` (carried on `cursor/saved-tab`)
 - [ ] Wire genre filter + category destinations to real feeds/APIs
 
-## Saved tab (UI shell)
+## Saved tab
 
 - [x] Visible Saved tab shell (`bookmark-outline`, empty-state copy) — on `cursor/saved-tab`
-- [ ] Persist saves + wire list / title save affordances
+- [x] Persist saves + wire list / title save affordances — on `cursor/bookmarks-saved` (`saves` table self-only RLS; `useMySaves` / `useToggleSave`; bookmark on detail + posters/hero/search/decider; Movies | TV list)
 
 ## Phase 6 — Polish & release (stub)
 

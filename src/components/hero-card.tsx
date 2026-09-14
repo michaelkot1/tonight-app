@@ -18,6 +18,8 @@ interface HeroCardProps {
   socialLine?: string;
   /** Overlapping friend avatars rendered beside the social line. */
   friendPile?: ReactNode;
+  /** Top-right overlay action (e.g. bookmark). */
+  action?: ReactNode;
   /** White "Watch" CTA. No-op safe. */
   onWatch?: () => void;
   /** Tap anywhere on the card (e.g. open detail). */
@@ -38,6 +40,7 @@ export function HeroCard({
   meta,
   socialLine,
   friendPile,
+  action,
   onWatch,
   onPress,
   chipLabel = "Tonight's pick",
@@ -65,6 +68,8 @@ export function HeroCard({
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
+
+      {action ? <View style={styles.action}>{action}</View> : null}
 
       <View style={styles.overlay}>
         <View style={styles.chip}>
@@ -136,6 +141,12 @@ const styles = StyleSheet.create({
   },
   fallback: {
     backgroundColor: colors.surface,
+  },
+  action: {
+    position: 'absolute',
+    top: spacing.lg,
+    right: spacing.lg,
+    zIndex: 2,
   },
   overlay: {
     padding: spacing.xxl,
