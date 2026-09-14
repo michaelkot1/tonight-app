@@ -17,8 +17,15 @@ export const routes = {
   confirmEmail: (email: string): Href =>
     asHref(`/(auth)/confirm-email?email=${encodeURIComponent(email)}`),
   tabs: asHref('/(tabs)'),
-  /** Search screen, pushed from the Home header (hidden tab). */
-  search: asHref('/(tabs)/search'),
+  /** Browse tab — search affordance + genre chips + category grid. */
+  browse: asHref('/(tabs)/browse'),
+  /** Saved tab — placeholder shell (no persistence yet). */
+  saved: asHref('/(tabs)/saved'),
+  /**
+   * Search — root Stack screen above `(tabs)`, so Back returns to the tab that
+   * pushed it (Home or Browse) instead of resetting to the tabs' initial route.
+   */
+  search: asHref('/search'),
   /**
    * Title detail — root Stack screen above `(tabs)`, so Back returns to the
    * tab that pushed it (e.g. Decider Results) instead of resetting to Home.

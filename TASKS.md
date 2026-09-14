@@ -55,7 +55,7 @@ Work on feature branches (`cursor/...`), never directly on `main`. Companion doc
 
 ### Wave 2 — screens + Home + taste-seed
 - [x] Edge Function `tmdb-popular` (auth JWT): TMDB trending (movie + tv), upsert lightweight `titles`; hook `usePopularTitles`
-- [x] Search screen pushed from Home header (debounced query → open detail); hidden `(tabs)/search` route
+- [x] Search screen pushed from Home header / Browse (debounced query → open detail); root Stack route `search` (above `(tabs)`, so Back returns to the opener)
 - [x] Title detail route (`title/[id]`, hidden tab) with metadata, IMDb/RT/TMDB scores, US providers, rating control
 - [x] Home: For You + search affordance + Tonight’s pick hero + Popular / Your ratings / More to explore rails (interim pick heuristic)
 - [x] Onboarding taste-seed: real TMDB popular titles + rating gesture (replace Phase 2 placeholder)
@@ -94,6 +94,16 @@ Work on feature branches (`cursor/...`), never directly on `main`. Companion doc
 - [x] Verify: `tsc`, `expo lint`, `expo export --platform ios`
 - [ ] **Owner smoke-test:** solo + with friend; filters; shuffle; empty cold-start copy; confirm Edge secrets TMDB/OMDb if enrich path needed
 - [ ] **Exit criteria (pending):** correct on-service Top 3 for real friend/rating data with why-picked + ratings + service label
+
+## Browse tab (UI shell)
+
+- [x] Visible Browse tab (`Home → Browse → Decide FAB → Saved → Profile`): search → `routes.search`, genre chips (local select), 2×2 category cards — on `cursor/browse-tab` (carried on `cursor/saved-tab`)
+- [ ] Wire genre filter + category destinations to real feeds/APIs
+
+## Saved tab (UI shell)
+
+- [x] Visible Saved tab shell (`bookmark-outline`, empty-state copy) — on `cursor/saved-tab`
+- [ ] Persist saves + wire list / title save affordances
 
 ## Phase 6 — Polish & release (stub)
 

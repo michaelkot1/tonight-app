@@ -1,7 +1,7 @@
 # PLAN.md — Tonight (phased build plan)
 
 > Working proposal from the orchestrator. Companion docs: [`spec.md`](spec.md), [`design.md`](design.md), [`AGENTS.md`](AGENTS.md).
-> Status: **Phase 5 Wave 1 implemented on `cursor/phase-5-decider` (pending owner smoke-test; Phase 5 exit criteria not yet met). Phase 4 Wave 1 + Wave 2 on `cursor/phase-4-friends-invites`. Phase 3 client complete (pending owner TMDB/OMDb Edge secrets). Apple/Google OAuth + notifications OS prompt deferred. Phase 1 + Phase 0 done.**
+> Status: **Saved tab UI shell on `cursor/saved-tab` (placeholder empty-state; no persistence). Browse tab UI shell carried from `cursor/browse-tab`. Tab order `Home → Browse → Decide FAB → Saved → Profile`. Phase 5 Wave 1 on `cursor/phase-5-decider` (pending owner smoke-test). Phase 4 Wave 1 + Wave 2 on `cursor/phase-4-friends-invites`. Phase 3 client complete (pending owner TMDB/OMDb Edge secrets). Apple/Google OAuth + notifications OS prompt deferred. Phase 1 + Phase 0 done.**
 
 This plan is intentionally phased and top-down. Each phase produces reviewable, mergeable work on a feature branch (never `main`). Exploration → `scout`, implementation → `implementer`, review → orchestrator (main agent).
 
@@ -118,7 +118,7 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 - Edge Functions deployed via Supabase MCP (all `verify_jwt`): `tmdb-search`, `tmdb-title`, `tmdb-popular`.
 - Data layer: `src/lib/titles.ts` (typed JSON parsers + image/display helpers), `src/lib/edge.ts`, hooks `useTitleSearch` / `useTitle` / `usePopularTitles` / `useRateTitle` / `useMyRatings`; provider→service matcher in `src/lib/services.ts`.
 - UI primitives: `RatingControl`, `PosterCard`, `PosterRail`, `HeroCard`.
-- Screens: Home (For You + search affordance + interim Tonight’s pick hero + Popular / Your ratings / More rails), Search (`(tabs)/search`, hidden), Title detail (`(tabs)/title/[id]`, hidden; scores + US providers + rating), onboarding taste-seed wired to real popular titles.
+- Screens: Home (For You + search affordance + interim Tonight’s pick hero + Popular / Your ratings / More rails), Search (`search`, root Stack above `(tabs)`), Title detail (`(tabs)/title/[id]`, hidden; scores + US providers + rating), onboarding taste-seed wired to real popular titles.
 - Interim Tonight’s pick = top trending title; provider-based service filtering deferred until enriched rows / Decider (lightweight popular feed omits providers).
 - Verify: `tsc`, `expo lint`, `expo export --platform ios` all clean.
 - **Blocker (owner):** set Supabase Edge Function secrets `TMDB_READ_ACCESS_TOKEN` (or `TMDB_API_KEY`) + `OMDB_API_KEY`; without them the `tmdb-*` functions return `tmdb_not_configured` / no OMDb scores.
@@ -169,6 +169,14 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 - Client: `src/lib/decider.ts` + `useDeciderRank`; Decider screen Setup → Results (hero #1 + supporting #2/#3, Shuffle client offset over ranked list ≥12, tap → title detail). Friends admin chrome removed from Decider (Friends stays on Profile).
 - Setup UX polish: genre chips wrap (no horizontal scroll); “Find tonight's picks” pinned in a tab-bar-clearing footer (`spacing.navContent`); results step still full-page scroll.
 - **Blocker (owner):** same Edge secrets as Phase 3 (`TMDB_READ_ACCESS_TOKEN` / `TMDB_API_KEY` + `OMDB_API_KEY`) for enrichment when the cached enriched pool is thin (~5/69). Ranking still runs on already-enriched rows.
+
+## Browse tab (UI shell)
+
+**Status:** ✅ UI shell on `cursor/browse-tab` (carried on `cursor/saved-tab`). Tab order `Home → Browse → Decide FAB → Saved → Profile`. Search field pushes `routes.search`; genre chips local-select only; category cards pressable stubs (no feeds yet). Supersedes Phase 3 “no 4th tab” for this surface.
+
+## Saved tab (UI shell)
+
+**Status:** ✅ UI shell on `cursor/saved-tab`. Placeholder empty-state only (bookmark icon + copy). No save affordances on titles, no persistence, no data wiring yet.
 
 ## Phase 6 — Polish, notifications & release prep
 
