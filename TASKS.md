@@ -97,7 +97,7 @@ Work on feature branches (`cursor/...`), never directly on `main`. Companion doc
 
 ## Browse tab (UI shell)
 
-- [x] Visible Browse tab (`Home → Browse → Decide FAB → Saved → Profile`): search → `routes.search`, genre chips (local select), 2×2 category cards — on `cursor/browse-tab` (carried on `cursor/saved-tab`)
+- [x] Visible Search tab (`Home → Decide FAB → Search`; route still `browse`; Saved/Profile/Friends hidden): search → `routes.search`, genre chips (local select), 2×2 category cards — on `cursor/browse-tab` (carried on `cursor/saved-tab`)
 - [ ] Wire genre filter + category destinations to real feeds/APIs
 
 ## Saved tab (UI shell)

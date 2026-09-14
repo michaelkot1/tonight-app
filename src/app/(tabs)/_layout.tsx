@@ -27,15 +27,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="browse"
-        options={{
-          title: 'Browse',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="compass" size={size ?? 24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="decider"
         options={{
           title: 'Decide',
@@ -47,24 +38,17 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="saved"
+        name="browse"
         options={{
-          title: 'Saved',
+          title: 'Search',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="bookmark-outline" size={size ?? 24} color={color} />
+            <Ionicons name="search" size={size ?? 24} color={color} />
           ),
         }}
       />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size ?? 24} color={color} />
-          ),
-        }}
-      />
-      {/* Hidden from the tab bar — reached via Profile push. */}
+      {/* Hidden from the tab bar — reached via Home header / Profile push. */}
+      <Tabs.Screen name="saved" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null }} />
       <Tabs.Screen name="friends" options={{ href: null }} />
 
     </Tabs>

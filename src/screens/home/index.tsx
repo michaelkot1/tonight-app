@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,28 +9,45 @@ import { HeroCard } from '@/components/hero-card';
 import { PosterCard } from '@/components/poster-card';
 import { PosterRail } from '@/components/poster-rail';
 import { ThemedText } from '@/components/themed-text';
+import { UserAvatar } from '@/components/user-avatar';
 import { useFriendSocialByTitle } from '@/hooks/use-friends';
+import { useProfile } from '@/hooks/use-profile';
 import {
   useMyRatings,
   usePopularTitles,
   type MyRating,
+  type PopularMediaFilter,
   type TitleSearchResult,
 } from '@/hooks/use-titles';
 import { routes } from '@/lib/routes';
 import { displayRating, parseGenres, releaseYear } from '@/lib/titles';
-import { colors, spacing } from '@/theme';
+import { colors, fonts, spacing } from '@/theme';
 
 const MEDIA_LABEL: Record<TitleSearchResult['media_type'], string> = {
   movie: 'Movie',
   tv: 'TV',
 };
 
+/** Max-style content-type tabs (not Browse genre chips). */
+const HOME_CATEGORIES = [
+  { id: 'home', label: 'Home', mediaFilter: 'all' as PopularMediaFilter },
+  { id: 'series', label: 'Series', mediaFilter: 'tv' as PopularMediaFilter },
+  { id: 'movies', label: 'Movies', mediaFilter: 'movie' as PopularMediaFilter },
+] as const;
+
+type HomeCategoryId = (typeof HOME_CATEGORIES)[number]['id'];
+
 export function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [categoryId, setCategoryId] = useState<HomeCategoryId>('home');
 
+  const mediaFilter =
+    HOME_CATEGORIES.find((c) => c.id === categoryId)?.mediaFilter ?? 'all';
+
+  const { data: profile } = useProfile();
   const { data: popular, isLoading: popularLoading, isError: popularError } =
-    usePopularTitles('all');
+    usePopularTitles(mediaFilter);
   const { data: myRatings } = useMyRatings();
 
   const results = popular ?? [];
@@ -71,6 +88,7 @@ export function HomeScreen() {
     ? [releaseYear(pick.release_date), MEDIA_LABEL[pick.media_type]].filter(Boolean).join(' · ')
     : undefined;
   const pickSocial = pick ? socialByTitle?.get(pick.id) : undefined;
+  const avatarLabel = profile?.handle ?? profile?.display_name ?? null;
 
   return (
     <ScrollView
@@ -85,16 +103,63 @@ export function HomeScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <ThemedText variant="screenTitle">For You</ThemedText>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Search titles"
-          onPress={() => router.push(routes.search)}
-          hitSlop={12}
-          style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryRow}
+          style={styles.categoryScroll}
         >
-          <Ionicons name="search" size={20} color={colors.textPrimary} />
-        </Pressable>
+          {HOME_CATEGORIES.map((cat) => {
+            const active = cat.id === categoryId;
+            return (
+              <Pressable
+                key={cat.id}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={cat.label}
+                onPress={() => setCategoryId(cat.id)}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.categoryTab,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <ThemedText
+                  style={[styles.categoryLabel, active && styles.categoryLabelActive]}
+                >
+                  {cat.label}
+                </ThemedText>
+                {active ? <View style={styles.categoryUnderline} /> : null}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        <View style={styles.headerActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Saved"
+            onPress={() => router.push(routes.saved)}
+            hitSlop={12}
+            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="bookmark-outline" size={22} color={colors.textPrimary} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Profile"
+            onPress={() => router.push(routes.profile)}
+            hitSlop={12}
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <UserAvatar
+              uri={profile?.avatar_url}
+              label={avatarLabel}
+              size={40}
+              ringColor={colors.border}
+            />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.heroSlot}>
@@ -209,17 +274,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.inset,
+    gap: spacing.md,
+    paddingLeft: spacing.inset,
+    paddingRight: spacing.inset,
   },
-  searchButton: {
+  categoryScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  categoryTab: {
+    paddingBottom: spacing.xs,
+    justifyContent: 'center',
+  },
+  categoryLabel: {
+    fontFamily: fonts.body.medium,
+    fontSize: 16,
+    color: colors.textMuted,
+  },
+  categoryLabelActive: {
+    fontFamily: fonts.body.semiBold,
+    color: colors.textPrimary,
+  },
+  categoryUnderline: {
+    marginTop: spacing.xs,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: colors.textPrimary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexShrink: 0,
+  },
+  iconButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   heroSlot: {
     paddingHorizontal: spacing.inset,
