@@ -41,7 +41,7 @@ export function BrowseScreen() {
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      <ThemedText variant="screenTitle">Browse</ThemedText>
+      <ThemedText variant="screenTitle">Search</ThemedText>
 
       <Pressable
         accessibilityRole="button"

@@ -1,7 +1,7 @@
 # PLAN.md — Tonight (phased build plan)
 
 > Working proposal from the orchestrator. Companion docs: [`spec.md`](spec.md), [`design.md`](design.md), [`AGENTS.md`](AGENTS.md).
-> Status: **Saved tab UI shell on `cursor/saved-tab` (placeholder empty-state; no persistence). Browse tab UI shell carried from `cursor/browse-tab`. Tab order `Home → Browse → Decide FAB → Saved → Profile`. Phase 5 Wave 1 on `cursor/phase-5-decider` (pending owner smoke-test). Phase 4 Wave 1 + Wave 2 on `cursor/phase-4-friends-invites`. Phase 3 client complete (pending owner TMDB/OMDb Edge secrets). Apple/Google OAuth + notifications OS prompt deferred. Phase 1 + Phase 0 done.**
+> Status: **Saved tab UI shell on `cursor/saved-tab` (placeholder empty-state; no persistence). Browse tab UI shell carried from `cursor/browse-tab`. Visible tabs `Home → Decide FAB → Search` (Saved/Profile/Friends hidden from tab bar). Phase 5 Wave 1 on `cursor/phase-5-decider` (pending owner smoke-test). Phase 4 Wave 1 + Wave 2 on `cursor/phase-4-friends-invites`. Phase 3 client complete (pending owner TMDB/OMDb Edge secrets). Apple/Google OAuth + notifications OS prompt deferred. Phase 1 + Phase 0 done.**
 
 This plan is intentionally phased and top-down. Each phase produces reviewable, mergeable work on a feature branch (never `main`). Exploration → `scout`, implementation → `implementer`, review → orchestrator (main agent).
 
@@ -106,7 +106,7 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 **Orchestrator locks (2026-09-10):**
 - **Ingest:** Supabase Edge Function(s) with service role (mirror `delete-account`); TMDB/OMDb secrets stay server-side. Clients never write `titles` (RLS select-only).
 - **Contract:** search upserts lightweight `titles` rows; detail/ensure enriches providers + OMDb scores.
-- **Search UX:** Home header search → push search screen (no 4th tab).
+- **Search UX:** Search tab (and `/search`) → push search screen; Home header → Profile (`routes.profile`).
 - **Detail routing:** stack/modal routes for `search` + `title/[id]` (hidden from tab bar).
 - **Interim Tonight’s pick (pre-Decider):** trending/popular filtered to user’s services when possible; else highest `tmdb_popularity` among cached titles; empty state if none.
 - **Rails:** `FlatList` now; FlashList deferred to Phase 6.
@@ -172,7 +172,7 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 
 ## Browse tab (UI shell)
 
-**Status:** ✅ UI shell on `cursor/browse-tab` (carried on `cursor/saved-tab`). Tab order `Home → Browse → Decide FAB → Saved → Profile`. Search field pushes `routes.search`; genre chips local-select only; category cards pressable stubs (no feeds yet). Supersedes Phase 3 “no 4th tab” for this surface.
+**Status:** ✅ UI shell on `cursor/browse-tab` (carried on `cursor/saved-tab`). Visible tabs `Home → Decide FAB → Search` (route still `browse`; Saved/Profile/Friends hidden from tab bar). Search field pushes `routes.search`; genre chips local-select only; category cards pressable stubs (no feeds yet). Supersedes Phase 3 “no 4th tab” for this surface.
 
 ## Saved tab (UI shell)
 

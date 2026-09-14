@@ -21,9 +21,11 @@ export const routes = {
   browse: asHref('/(tabs)/browse'),
   /** Saved tab — placeholder shell (no persistence yet). */
   saved: asHref('/(tabs)/saved'),
+  /** Profile tab. */
+  profile: asHref('/(tabs)/profile'),
   /**
    * Search — root Stack screen above `(tabs)`, so Back returns to the tab that
-   * pushed it (Home or Browse) instead of resetting to the tabs' initial route.
+   * pushed it (e.g. Browse) instead of resetting to the tabs' initial route.
    */
   search: asHref('/search'),
   /**
