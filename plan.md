@@ -170,6 +170,14 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 - Setup UX polish: genre chips wrap (no horizontal scroll); “Find tonight's picks” pinned in a tab-bar-clearing footer (`spacing.navContent`); results step still full-page scroll.
 - **Blocker (owner):** same Edge secrets as Phase 3 (`TMDB_READ_ACCESS_TOKEN` / `TMDB_API_KEY` + `OMDB_API_KEY`) for enrichment when the cached enriched pool is thin (~5/69). Ranking still runs on already-enriched rows.
 
+### Decider fresh shuffle
+
+**Status:** 🟢 Implemented on `cursor/decider-fresh-shuffle` (from `cursor/search-stories`; pending owner smoke-test).
+- **Edge (`decider-rank` v6):** optional `exclude_ids` (hard-skip, capped 120) + `demote_ids` (score × 0.35 soft-decay).
+- **Client:** session seen set for displayed pages; buffer `exclude_ids` on prefetch/shuffle so shuffled-past titles don’t resurface; `ensureBuffer` prefetches when remaining < 6 (and force-fetch when Shuffle needs more); no longer hard-stops after the first 12; New setup / re-Decide folds seen IDs into `demote_ids` so a fresh Find ranks them lower instead of repeating the same Top 3; end copy: “No more fresh picks…”.
+- Prefetch uses direct `invokeDeciderRank` so background fetches don’t flip mutation loading.
+- Verify: `tsc` + `expo lint` clean.
+
 ## Browse tab (UI shell)
 
 **Status:** ✅ UI shell on `cursor/browse-tab` (carried on `cursor/saved-tab`). Visible tabs `Home → Decide FAB → Search` (route still `browse`; Saved/Profile/Friends hidden from tab bar). Search field pushes `routes.search`; genre chips local-select only; category cards pressable stubs (no feeds yet). Supersedes Phase 3 “no 4th tab” for this surface.

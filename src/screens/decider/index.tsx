@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -29,6 +29,8 @@ import {
   DECIDER_FETCH_LIMIT,
   DECIDER_GENRE_CHIPS,
   DECIDER_PAGE_SIZE,
+  DECIDER_PREFETCH_THRESHOLD,
+  invokeDeciderRank,
   type DeciderMediaFilter,
   type DeciderPick,
 } from '@/lib/decider';
@@ -176,6 +178,19 @@ export function DeciderScreen() {
   const [pageOffset, setPageOffset] = useState(0);
   const [coldStart, setColdStart] = useState(false);
   const [emptyNote, setEmptyNote] = useState<string | null>(null);
+  const [sessionSeenIds, setSessionSeenIds] = useState<Set<string>>(() => new Set());
+  const [demoteIds, setDemoteIds] = useState<Set<string>>(() => new Set());
+  const [exhausted, setExhausted] = useState(false);
+  const [prefetching, setPrefetching] = useState(false);
+
+  /** IDs ever appended to `allPicks` this Decide cycle (exclude_ids source). */
+  const bufferIdsRef = useRef<Set<string>>(new Set());
+  const allPicksRef = useRef<DeciderPick[]>([]);
+  const pageOffsetRef = useRef(0);
+  const exhaustedRef = useRef(false);
+  const prefetchingRef = useRef(false);
+  const sessionSeenIdsRef = useRef<Set<string>>(new Set());
+  const demoteIdsRef = useRef<Set<string>>(new Set());
 
   const selfProfile: ProfileSummary | null = useMemo(() => {
     if (!profile) return null;
@@ -201,7 +216,8 @@ export function DeciderScreen() {
     [allPicks, pageOffset],
   );
 
-  const canShuffle = pageOffset + DECIDER_PAGE_SIZE < allPicks.length;
+  const hasLocalNext = pageOffset + DECIDER_PAGE_SIZE < allPicks.length;
+  const canShuffle = hasLocalNext || !exhausted;
 
   const toggleMember = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -212,8 +228,108 @@ export function DeciderScreen() {
     });
   }, []);
 
-  async function runDecide(offset = 0) {
+  const markPageSeen = useCallback((picks: DeciderPick[], offset: number) => {
+    const page = picks.slice(offset, offset + DECIDER_PAGE_SIZE);
+    if (page.length === 0) return;
+    for (const pick of page) {
+      sessionSeenIdsRef.current.add(pick.id);
+    }
+    setSessionSeenIds(new Set(sessionSeenIdsRef.current));
+  }, []);
+
+  const appendPicks = useCallback((incoming: DeciderPick[]): number => {
+    const fresh = incoming.filter((pick) => !bufferIdsRef.current.has(pick.id));
+    if (fresh.length === 0) return 0;
+    for (const pick of fresh) {
+      bufferIdsRef.current.add(pick.id);
+    }
+    const next = [...allPicksRef.current, ...fresh];
+    allPicksRef.current = next;
+    setAllPicks(next);
+    return fresh.length;
+  }, []);
+
+  const ensureBuffer = useCallback(
+    async (opts?: { force?: boolean }): Promise<number> => {
+      if (exhaustedRef.current || prefetchingRef.current) {
+        return allPicksRef.current.length;
+      }
+
+      const remaining =
+        allPicksRef.current.length - (pageOffsetRef.current + DECIDER_PAGE_SIZE);
+      if (!opts?.force && remaining >= DECIDER_PREFETCH_THRESHOLD) {
+        return allPicksRef.current.length;
+      }
+
+      if (!selfProfile || memberIds.length === 0) {
+        return allPicksRef.current.length;
+      }
+
+      prefetchingRef.current = true;
+      setPrefetching(true);
+      try {
+        // Direct invoke so background prefetch does not flip mutation `isPending`.
+        const result = await invokeDeciderRank({
+          member_ids: memberIds,
+          media,
+          genre_id: genreId,
+          exclude_ids: [...bufferIdsRef.current],
+          demote_ids: [],
+          offset: 0,
+          limit: DECIDER_FETCH_LIMIT,
+        });
+        if (result.error) {
+          exhaustedRef.current = true;
+          setExhausted(true);
+          return allPicksRef.current.length;
+        }
+        const added = appendPicks(result.picks ?? []);
+        if (added === 0) {
+          exhaustedRef.current = true;
+          setExhausted(true);
+        }
+        return allPicksRef.current.length;
+      } catch {
+        // Leave exhausted false so Shuffle can retry.
+        return allPicksRef.current.length;
+      } finally {
+        prefetchingRef.current = false;
+        setPrefetching(false);
+      }
+    },
+    [appendPicks, genreId, media, memberIds, selfProfile],
+  );
+
+  async function runDecide() {
     if (!selfProfile) return;
+
+    // Fold titles shown this cycle into demote so a re-decide soft-decays them.
+    const nextDemote = new Set(demoteIdsRef.current);
+    for (const id of sessionSeenIdsRef.current) {
+      nextDemote.add(id);
+    }
+    // State mirrors (also covers any in-render updates).
+    for (const id of sessionSeenIds) {
+      nextDemote.add(id);
+    }
+    for (const id of demoteIds) {
+      nextDemote.add(id);
+    }
+    demoteIdsRef.current = nextDemote;
+    setDemoteIds(nextDemote);
+
+    bufferIdsRef.current = new Set();
+    allPicksRef.current = [];
+    pageOffsetRef.current = 0;
+    sessionSeenIdsRef.current = new Set();
+    exhaustedRef.current = false;
+    prefetchingRef.current = false;
+
+    setAllPicks([]);
+    setPageOffset(0);
+    setSessionSeenIds(new Set());
+    setExhausted(false);
+    setPrefetching(false);
     setEmptyNote(null);
 
     try {
@@ -221,31 +337,61 @@ export function DeciderScreen() {
         member_ids: memberIds,
         media,
         genre_id: genreId,
+        exclude_ids: [],
+        demote_ids: [...nextDemote],
         offset: 0,
         limit: DECIDER_FETCH_LIMIT,
       });
 
       setColdStart(result.cold_start);
-      setAllPicks(result.picks ?? []);
-      setPageOffset(offset);
+      const picks = result.picks ?? [];
+      appendPicks(picks);
       setStep('results');
+      markPageSeen(allPicksRef.current, 0);
 
-      if ((result.picks ?? []).length === 0) {
+      if (picks.length === 0) {
         setEmptyNote(
           result.note ??
             'No eligible picks yet. Rate more titles, add services, or invite friends.',
         );
+      } else {
+        void ensureBuffer({ force: true });
       }
     } catch {
+      bufferIdsRef.current = new Set();
+      allPicksRef.current = [];
       setStep('results');
       setAllPicks([]);
       setEmptyNote("Couldn't find picks right now. Try again in a moment.");
     }
   }
 
-  function handleShuffle() {
-    if (!canShuffle) return;
-    setPageOffset((prev) => prev + DECIDER_PAGE_SIZE);
+  async function handleShuffle() {
+    const localNext = pageOffsetRef.current + DECIDER_PAGE_SIZE < allPicksRef.current.length;
+    if (!localNext && exhaustedRef.current) return;
+    if (prefetchingRef.current && !localNext) return;
+
+    markPageSeen(allPicksRef.current, pageOffsetRef.current);
+    const next = pageOffsetRef.current + DECIDER_PAGE_SIZE;
+
+    if (next < allPicksRef.current.length) {
+      pageOffsetRef.current = next;
+      setPageOffset(next);
+      markPageSeen(allPicksRef.current, next);
+      void ensureBuffer();
+      return;
+    }
+
+    await ensureBuffer({ force: true });
+    if (next < allPicksRef.current.length) {
+      pageOffsetRef.current = next;
+      setPageOffset(next);
+      markPageSeen(allPicksRef.current, next);
+      void ensureBuffer();
+    } else {
+      exhaustedRef.current = true;
+      setExhausted(true);
+    }
   }
 
   function openTitle(id: string) {
@@ -253,10 +399,29 @@ export function DeciderScreen() {
   }
 
   function backToSetup() {
-    setStep('setup');
+    // Fold seen titles into demote before clearing session so New setup → Find
+    // still soft-decays what they already viewed this screen session.
+    const nextDemote = new Set(demoteIdsRef.current);
+    for (const id of sessionSeenIdsRef.current) {
+      nextDemote.add(id);
+    }
+    demoteIdsRef.current = nextDemote;
+    setDemoteIds(nextDemote);
+
+    bufferIdsRef.current = new Set();
+    allPicksRef.current = [];
+    pageOffsetRef.current = 0;
+    sessionSeenIdsRef.current = new Set();
+    exhaustedRef.current = false;
+    prefetchingRef.current = false;
+
     setAllPicks([]);
     setPageOffset(0);
     setEmptyNote(null);
+    setExhausted(false);
+    setPrefetching(false);
+    setSessionSeenIds(new Set());
+    setStep('setup');
   }
 
   const hero = pagePicks[0];
@@ -379,7 +544,7 @@ export function DeciderScreen() {
               label="Find tonight's picks"
               loading={rank.isPending}
               disabled={!selfProfile || rank.isPending}
-              onPress={() => void runDecide(0)}
+              onPress={() => void runDecide()}
             />
           </View>
         </>
@@ -432,7 +597,7 @@ export function DeciderScreen() {
                     Cold start tip: rate a few Loved titles and keep services up to date.
                   </ThemedText>
                 ) : null}
-                <Button label="Try again" variant="secondary" onPress={() => void runDecide(0)} />
+                <Button label="Try again" variant="secondary" onPress={() => void runDecide()} />
                 <Button label="Adjust filters" variant="ghost" onPress={backToSetup} />
               </View>
             ) : null}
@@ -506,12 +671,13 @@ export function DeciderScreen() {
                   <Button
                     label="Shuffle"
                     variant="secondary"
-                    disabled={!canShuffle}
-                    onPress={handleShuffle}
+                    disabled={!canShuffle || rank.isPending}
+                    loading={prefetching && !hasLocalNext}
+                    onPress={() => void handleShuffle()}
                   />
                   {!canShuffle ? (
                     <ThemedText variant="caption" style={styles.shuffleHint}>
-                      End of this list — adjust filters for a fresh batch.
+                      No more fresh picks — try new filters, invite friends, or rate more titles.
                     </ThemedText>
                   ) : null}
                   <Button label="New setup" variant="ghost" onPress={backToSetup} />

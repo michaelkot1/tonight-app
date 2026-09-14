@@ -15,6 +15,10 @@ export interface DeciderRankRequest {
   genre_id?: number | null;
   offset?: number;
   limit?: number;
+  /** Hard-skip titles already in the client buffer / shuffled past this session. */
+  exclude_ids?: string[];
+  /** Soft-decay titles shown earlier this session (New setup → Find again). */
+  demote_ids?: string[];
 }
 
 export interface DeciderServiceBadge {
@@ -81,8 +85,10 @@ export const DECIDER_GENRE_CHIPS: { id: number | null; label: string }[] = [
 ];
 
 export const DECIDER_PAGE_SIZE = 3;
-/** Ask Edge for enough ranked rows to support several shuffles. */
+/** How many picks to ask for on each fetch / prefetch. */
 export const DECIDER_FETCH_LIMIT = 12;
+/** Prefetch when fewer than this many picks remain after the current page. */
+export const DECIDER_PREFETCH_THRESHOLD = 6;
 
 /** Invoke server-side ranking for the selected watching group + filters. */
 export async function invokeDeciderRank(
@@ -94,5 +100,7 @@ export async function invokeDeciderRank(
     genre_id: request.genre_id ?? null,
     offset: request.offset ?? 0,
     limit: request.limit ?? DECIDER_FETCH_LIMIT,
+    ...(request.exclude_ids != null ? { exclude_ids: request.exclude_ids } : {}),
+    ...(request.demote_ids != null ? { demote_ids: request.demote_ids } : {}),
   });
 }
