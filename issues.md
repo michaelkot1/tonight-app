@@ -79,3 +79,36 @@ None required for Phase 2. Consider RPC hardening when wiring handle edits from 
 - Current status: SMTP auth fixed (Resend accepts mail). New issue: message appears in Resend but not in Yahoo inbox (`kotmichael7@yahoo.com`) — deliverability / spam filtering, not app code. OTP template content is correct.
 - Next step: In Resend check that email’s status (Delivered / Bounced / Delayed). Check Yahoo Spam/Junk. Confirm SPF + DKIM + DMARC all verified for `tonight-app.org` in Resend. Test delivery to Gmail. App can accept the 6-digit code even if mail is only visible in Resend for now.
 
+---
+
+## ISSUE-005 — Decider Shuffle dies after ~3–4 presses (~12 titles) + same titles on re-Find
+
+- Status: resolved in code (client hard-exclude follow-up; pending owner smoke-test)
+- Location: `src/screens/decider/index.tsx` (`ensureBuffer` / `handleShuffle` / `runDecide` / `backToSetup`); `supabase/functions/decider-rank/index.ts` (MIN_POOL gate — already redeployed)
+- Problem:
+  1. Shuffle hard-stops after ~4 pages even when more titles should exist. Prefetch often added 0 rows → permanent `exhausted`; buffer stayed at `DECIDER_FETCH_LIMIT` (12).
+  2. **Follow-up:** Movie + Comedy + Me + 1 friend → Find → Shuffle → New setup / re-Find kept returning the **exact same suggestions**. Soft `demote_ids` (×0.35) was too weak on a thin eligible pool.
+- Suspected cause:
+  1. Client early-returned on Shuffle while `prefetchingRef` was set, then marked exhausted when no local next page.
+  2. Client treated first `added === 0` / soft errors as exhausted and ignored response `total`.
+  3. Edge ran enrich/ingest only when pre-service `candidates.length < MIN_POOL`; after exclude, post-service eligible could be thin while candidates stayed ≥ 12, so prefetch returned no new rows.
+  4. **Follow-up:** `runDecide` cleared session seen and sent `exclude_ids: []`, only soft-demoting prior shown IDs — demoted titles still won Top-N.
+
+### Attempts
+
+#### Attempt 1
+- Solution: Client awaits in-flight prefetch via `prefetchPromiseRef`; exhaust only when `total === 0` or two consecutive empty adds; soft errors stay retryable. Edge drives MIN_POOL enrich/ingest off post-service eligible (after `exclude_ids`), skipping excluded ids in enrich targets.
+- Result: Succeeded for shuffle exhaustion. **`decider-rank` redeployed** to `tonight-app-db` (`kxvnmwnhiiortqpjzvog`) via `supabase functions deploy decider-rank --use-api`. Re-Find still repeated the same Top-N (soft demote).
+
+#### Attempt 2
+- Solution: Persist `sessionSeenIdsRef` for titles shown this Decider visit; on Find pass them as **`exclude_ids`** (hard-skip). Do not clear session seen on Find or New setup — clear only on Decider unmount. Prefetch exclude = buffer ∪ sessionSeen. Soft demote unused for shown IDs. No edge redeploy (contract unchanged).
+- Result: Succeeded in code review / typecheck+lint. Runtime confirmation still needs owner smoke-test. Thin Movie+Comedy pool locking after ~4 shuffles is expected if eligible ≈12 (no wrap).
+
+### Current Understanding
+
+Shuffle race/exhaustion + edge under-expand after exclude were required for prefetch depth. Re-Find / New setup identity repeats needed **hard exclude of session-seen**, not soft demote. Edge `exclude_ids` already works.
+
+### Next Step
+
+Owner smoke-test: Movie + Comedy + Me + 1 friend → Find → Shuffle distinct pages until hint (~4 OK if pool ~12); New setup → Find again must not return any title shown earlier that Decider session; no silent wrap.
+

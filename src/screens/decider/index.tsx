@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -178,19 +178,30 @@ export function DeciderScreen() {
   const [pageOffset, setPageOffset] = useState(0);
   const [coldStart, setColdStart] = useState(false);
   const [emptyNote, setEmptyNote] = useState<string | null>(null);
-  const [sessionSeenIds, setSessionSeenIds] = useState<Set<string>>(() => new Set());
-  const [demoteIds, setDemoteIds] = useState<Set<string>>(() => new Set());
   const [exhausted, setExhausted] = useState(false);
   const [prefetching, setPrefetching] = useState(false);
 
-  /** IDs ever appended to `allPicks` this Decide cycle (exclude_ids source). */
+  /** IDs ever appended to `allPicks` this Decide cycle. */
   const bufferIdsRef = useRef<Set<string>>(new Set());
   const allPicksRef = useRef<DeciderPick[]>([]);
   const pageOffsetRef = useRef(0);
   const exhaustedRef = useRef(false);
   const prefetchingRef = useRef(false);
+  /** In-flight ensureBuffer promise so Shuffle can await instead of early-returning. */
+  const prefetchPromiseRef = useRef<Promise<number> | null>(null);
+  /** Consecutive fetches that added 0 rows while `total` still looked open. */
+  const emptyStreakRef = useRef(0);
+  /**
+   * Titles already shown this Decider visit (hard-exclude on Find / prefetch).
+   * Survives New setup + re-Find; cleared only on unmount.
+   */
   const sessionSeenIdsRef = useRef<Set<string>>(new Set());
-  const demoteIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    return () => {
+      sessionSeenIdsRef.current = new Set();
+    };
+  }, []);
 
   const selfProfile: ProfileSummary | null = useMemo(() => {
     if (!profile) return null;
@@ -234,11 +245,23 @@ export function DeciderScreen() {
     for (const pick of page) {
       sessionSeenIdsRef.current.add(pick.id);
     }
-    setSessionSeenIds(new Set(sessionSeenIdsRef.current));
+  }, []);
+
+  /** Hard-exclude: current buffer ∪ titles shown earlier this Decider visit. */
+  const collectExcludeIds = useCallback((): string[] => {
+    const ids = new Set(bufferIdsRef.current);
+    for (const id of sessionSeenIdsRef.current) {
+      ids.add(id);
+    }
+    return [...ids];
   }, []);
 
   const appendPicks = useCallback((incoming: DeciderPick[]): number => {
-    const fresh = incoming.filter((pick) => !bufferIdsRef.current.has(pick.id));
+    const fresh = incoming.filter(
+      (pick) =>
+        !bufferIdsRef.current.has(pick.id) &&
+        !sessionSeenIdsRef.current.has(pick.id),
+    );
     if (fresh.length === 0) return 0;
     for (const pick of fresh) {
       bufferIdsRef.current.add(pick.id);
@@ -251,8 +274,16 @@ export function DeciderScreen() {
 
   const ensureBuffer = useCallback(
     async (opts?: { force?: boolean }): Promise<number> => {
-      if (exhaustedRef.current || prefetchingRef.current) {
+      if (exhaustedRef.current) {
         return allPicksRef.current.length;
+      }
+
+      // Await in-flight prefetch — Shuffle must not early-return while prefetchingRef is set.
+      if (prefetchPromiseRef.current) {
+        await prefetchPromiseRef.current;
+        if (exhaustedRef.current) {
+          return allPicksRef.current.length;
+        }
       }
 
       const remaining =
@@ -261,73 +292,86 @@ export function DeciderScreen() {
         return allPicksRef.current.length;
       }
 
+      // Another caller may have started a fetch while we awaited; join it.
+      if (prefetchPromiseRef.current) {
+        return prefetchPromiseRef.current;
+      }
+
       if (!selfProfile || memberIds.length === 0) {
         return allPicksRef.current.length;
       }
 
       prefetchingRef.current = true;
       setPrefetching(true);
-      try {
-        // Direct invoke so background prefetch does not flip mutation `isPending`.
-        const result = await invokeDeciderRank({
-          member_ids: memberIds,
-          media,
-          genre_id: genreId,
-          exclude_ids: [...bufferIdsRef.current],
-          demote_ids: [],
-          offset: 0,
-          limit: DECIDER_FETCH_LIMIT,
-        });
-        if (result.error) {
-          exhaustedRef.current = true;
-          setExhausted(true);
+
+      const run = (async (): Promise<number> => {
+        try {
+          // Direct invoke so background prefetch does not flip mutation `isPending`.
+          const result = await invokeDeciderRank({
+            member_ids: memberIds,
+            media,
+            genre_id: genreId,
+            exclude_ids: collectExcludeIds(),
+            demote_ids: [],
+            offset: 0,
+            limit: DECIDER_FETCH_LIMIT,
+          });
+          if (result.error) {
+            // Soft error — keep Shuffle retryable; do not mark exhausted.
+            return allPicksRef.current.length;
+          }
+
+          const serverTotal = typeof result.total === 'number' ? result.total : null;
+          const added = appendPicks(result.picks ?? []);
+
+          // `total` is eligible remaining after exclude_ids — authoritative pool size.
+          if (serverTotal === 0) {
+            exhaustedRef.current = true;
+            setExhausted(true);
+            emptyStreakRef.current = 0;
+          } else if (added === 0) {
+            emptyStreakRef.current += 1;
+            // Repeated empty after exclude → treat as done (covers missing `total`).
+            if (emptyStreakRef.current >= 2) {
+              exhaustedRef.current = true;
+              setExhausted(true);
+            }
+          } else {
+            emptyStreakRef.current = 0;
+          }
+
           return allPicksRef.current.length;
+        } catch {
+          // Leave exhausted false so Shuffle can retry.
+          return allPicksRef.current.length;
+        } finally {
+          prefetchingRef.current = false;
+          setPrefetching(false);
+          prefetchPromiseRef.current = null;
         }
-        const added = appendPicks(result.picks ?? []);
-        if (added === 0) {
-          exhaustedRef.current = true;
-          setExhausted(true);
-        }
-        return allPicksRef.current.length;
-      } catch {
-        // Leave exhausted false so Shuffle can retry.
-        return allPicksRef.current.length;
-      } finally {
-        prefetchingRef.current = false;
-        setPrefetching(false);
-      }
+      })();
+
+      prefetchPromiseRef.current = run;
+      return run;
     },
-    [appendPicks, genreId, media, memberIds, selfProfile],
+    [appendPicks, collectExcludeIds, genreId, media, memberIds, selfProfile],
   );
 
   async function runDecide() {
     if (!selfProfile) return;
 
-    // Fold titles shown this cycle into demote so a re-decide soft-decays them.
-    const nextDemote = new Set(demoteIdsRef.current);
-    for (const id of sessionSeenIdsRef.current) {
-      nextDemote.add(id);
-    }
-    // State mirrors (also covers any in-render updates).
-    for (const id of sessionSeenIds) {
-      nextDemote.add(id);
-    }
-    for (const id of demoteIds) {
-      nextDemote.add(id);
-    }
-    demoteIdsRef.current = nextDemote;
-    setDemoteIds(nextDemote);
-
+    // Fresh Top-N page buffer only — keep sessionSeen hard-exclude across re-Find.
+    const sessionExclude = [...sessionSeenIdsRef.current];
     bufferIdsRef.current = new Set();
     allPicksRef.current = [];
     pageOffsetRef.current = 0;
-    sessionSeenIdsRef.current = new Set();
     exhaustedRef.current = false;
     prefetchingRef.current = false;
+    prefetchPromiseRef.current = null;
+    emptyStreakRef.current = 0;
 
     setAllPicks([]);
     setPageOffset(0);
-    setSessionSeenIds(new Set());
     setExhausted(false);
     setPrefetching(false);
     setEmptyNote(null);
@@ -337,8 +381,8 @@ export function DeciderScreen() {
         member_ids: memberIds,
         media,
         genre_id: genreId,
-        exclude_ids: [],
-        demote_ids: [...nextDemote],
+        exclude_ids: sessionExclude,
+        demote_ids: [],
         offset: 0,
         limit: DECIDER_FETCH_LIMIT,
       });
@@ -354,6 +398,11 @@ export function DeciderScreen() {
           result.note ??
             'No eligible picks yet. Rate more titles, add services, or invite friends.',
         );
+        // Authoritative empty pool from the initial Decide response.
+        if (typeof result.total === 'number' && result.total === 0) {
+          exhaustedRef.current = true;
+          setExhausted(true);
+        }
       } else {
         void ensureBuffer({ force: true });
       }
@@ -369,11 +418,22 @@ export function DeciderScreen() {
   async function handleShuffle() {
     const localNext = pageOffsetRef.current + DECIDER_PAGE_SIZE < allPicksRef.current.length;
     if (!localNext && exhaustedRef.current) return;
-    if (prefetchingRef.current && !localNext) return;
 
     markPageSeen(allPicksRef.current, pageOffsetRef.current);
     const next = pageOffsetRef.current + DECIDER_PAGE_SIZE;
 
+    if (next < allPicksRef.current.length) {
+      pageOffsetRef.current = next;
+      setPageOffset(next);
+      markPageSeen(allPicksRef.current, next);
+      void ensureBuffer();
+      return;
+    }
+
+    // No local next — await any in-flight prefetch first, then force only if still short.
+    if (prefetchPromiseRef.current) {
+      await prefetchPromiseRef.current;
+    }
     if (next < allPicksRef.current.length) {
       pageOffsetRef.current = next;
       setPageOffset(next);
@@ -388,10 +448,8 @@ export function DeciderScreen() {
       setPageOffset(next);
       markPageSeen(allPicksRef.current, next);
       void ensureBuffer();
-    } else {
-      exhaustedRef.current = true;
-      setExhausted(true);
     }
+    // If still no page, ensureBuffer already set exhausted when total / repeated empty said so.
   }
 
   function openTitle(id: string) {
@@ -399,28 +457,21 @@ export function DeciderScreen() {
   }
 
   function backToSetup() {
-    // Fold seen titles into demote before clearing session so New setup → Find
-    // still soft-decays what they already viewed this screen session.
-    const nextDemote = new Set(demoteIdsRef.current);
-    for (const id of sessionSeenIdsRef.current) {
-      nextDemote.add(id);
-    }
-    demoteIdsRef.current = nextDemote;
-    setDemoteIds(nextDemote);
-
+    // Clear page buffer / UI only — keep sessionSeen so next Find hard-excludes
+    // titles already shown this Decider visit.
     bufferIdsRef.current = new Set();
     allPicksRef.current = [];
     pageOffsetRef.current = 0;
-    sessionSeenIdsRef.current = new Set();
     exhaustedRef.current = false;
     prefetchingRef.current = false;
+    prefetchPromiseRef.current = null;
+    emptyStreakRef.current = 0;
 
     setAllPicks([]);
     setPageOffset(0);
     setEmptyNote(null);
     setExhausted(false);
     setPrefetching(false);
-    setSessionSeenIds(new Set());
     setStep('setup');
   }
 
