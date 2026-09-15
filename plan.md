@@ -172,11 +172,11 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 
 ### Decider fresh shuffle
 
-**Status:** 🟢 Implemented on `cursor/decider-fresh-shuffle` (from `cursor/search-stories`; pending owner smoke-test).
-- **Edge (`decider-rank` v6):** optional `exclude_ids` (hard-skip, capped 120) + `demote_ids` (score × 0.35 soft-decay).
-- **Client:** session seen set for displayed pages; buffer `exclude_ids` on prefetch/shuffle so shuffled-past titles don’t resurface; `ensureBuffer` prefetches when remaining < 6 (and force-fetch when Shuffle needs more); no longer hard-stops after the first 12; New setup / re-Decide folds seen IDs into `demote_ids` so a fresh Find ranks them lower instead of repeating the same Top 3; end copy: “No more fresh picks…”.
+**Status:** 🟡 Client hard-exclude fix on `cursor/decider-fresh-shuffle` (ISSUE-005; pending owner smoke-test).
+- **Edge (`decider-rank`):** optional `exclude_ids` (hard-skip, capped 120) + `demote_ids` (score × 0.35 soft-decay). **MIN_POOL enrich/ingest is driven by post-service eligible count after exclude** (not only pre-service candidate count) so prefetch can grow the pool past the first 12. **Already redeployed** — no contract change for this follow-up (client-only).
+- **Client:** `sessionSeen` = titles shown this Decider visit; **re-Find / New setup → Find hard-excludes** those IDs via `exclude_ids` (not soft demote). Prefetch exclude = buffer ∪ sessionSeen. Clear page buffer on Find/New setup; **clear sessionSeen only on Decider unmount**. Exhaust when nothing fresh remains (`total === 0` / repeated empty); **no silent wrap/recycle**. End copy: “No more fresh picks…”.
 - Prefetch uses direct `invokeDeciderRank` so background fetches don’t flip mutation loading.
-- Verify: `tsc` + `expo lint` clean.
+- Verify: `tsc` + `expo lint` on touched files. Owner smoke-test still required (Movie+Comedy thin pool may lock after ~4 shuffles — expected).
 
 ## Browse tab (UI shell)
 

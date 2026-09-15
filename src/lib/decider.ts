@@ -15,9 +15,9 @@ export interface DeciderRankRequest {
   genre_id?: number | null;
   offset?: number;
   limit?: number;
-  /** Hard-skip titles already in the client buffer / shuffled past this session. */
+  /** Hard-skip: buffer + titles shown this Decider visit (Find / prefetch). */
   exclude_ids?: string[];
-  /** Soft-decay titles shown earlier this session (New setup → Find again). */
+  /** Soft-decay (unused for session-seen; hard exclude is the source of truth). */
   demote_ids?: string[];
 }
 

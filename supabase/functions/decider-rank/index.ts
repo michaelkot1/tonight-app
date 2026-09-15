@@ -79,6 +79,10 @@ const MIN_POOL = 12;
 const RETURN_LIMIT_DEFAULT = 12;
 const MAX_ENRICH = 15;
 const MAX_POPULAR_INGEST = 20;
+/** Discover pagination cap when back-filling a thin genre pool. */
+const MAX_DISCOVER_PAGES = 3;
+/** Stop paginating discover early once we've added this many new candidates. */
+const DISCOVER_STOP_AT = 20;
 /** Soft-decay multiplier for titles the client already surfaced this session. */
 const DEMOTE_FACTOR = 0.35;
 /** Cap client-supplied UUID lists so a huge payload cannot blow ranking. */
@@ -716,6 +720,100 @@ async function ingestPopular(
   return upserted;
 }
 
+/**
+ * TMDB `discover/{media}` scoped to a genre + the supported streaming providers
+ * for the current members. Used as a genre-aware fallback when the eligible
+ * pool for a specific chip (e.g. Comedy movies) is thin — trending/week is
+ * genre-blind and starves narrow filters.
+ */
+async function ingestDiscoverByGenre(
+  admin: SupabaseClient,
+  mediaFilter: MediaFilter,
+  genreId: number,
+  providerIds: number[],
+): Promise<TitleRow[]> {
+  const { headers, apiKey } = tmdbAuth();
+  if (!headers.Authorization && !apiKey) return [];
+  if (providerIds.length === 0) return [];
+
+  const mediaTypes: MediaType[] =
+    mediaFilter === 'movie' ? ['movie'] : mediaFilter === 'tv' ? ['tv'] : ['movie', 'tv'];
+
+  const upserted: TitleRow[] = [];
+  const providerParam = providerIds.join('|');
+
+  for (const mediaType of mediaTypes) {
+    let addedForMedia = 0;
+    for (let page = 1; page <= MAX_DISCOVER_PAGES; page += 1) {
+      const url = new URL(`${TMDB_BASE}/discover/${mediaType}`);
+      url.searchParams.set('language', 'en-US');
+      url.searchParams.set('sort_by', 'popularity.desc');
+      url.searchParams.set('watch_region', 'US');
+      url.searchParams.set('with_watch_providers', providerParam);
+      url.searchParams.set('with_watch_monetization_types', 'flatrate');
+      url.searchParams.set('with_genres', String(genreId));
+      url.searchParams.set('include_adult', 'false');
+      url.searchParams.set('page', String(page));
+      if (!headers.Authorization && apiKey) url.searchParams.set('api_key', apiKey);
+
+      const res = await fetch(url.toString(), { headers });
+      if (!res.ok) break;
+      const payload = (await res.json()) as {
+        results?: {
+          id: number;
+          title?: string;
+          name?: string;
+          poster_path?: string | null;
+          backdrop_path?: string | null;
+          release_date?: string;
+          first_air_date?: string;
+          vote_average?: number;
+          popularity?: number;
+          genre_ids?: number[];
+          overview?: string;
+        }[];
+      };
+
+      const results = payload.results ?? [];
+      if (results.length === 0) break;
+
+      for (const item of results) {
+        const lightweight = {
+          tmdb_id: item.id,
+          media_type: mediaType,
+          title: (item.title ?? item.name ?? '').trim() || 'Untitled',
+          overview: item.overview && item.overview.length > 0 ? item.overview : null,
+          poster_path: item.poster_path ?? null,
+          backdrop_path: item.backdrop_path ?? null,
+          release_date: nullableDate(item.release_date ?? item.first_air_date),
+          genres: mapGenres(mediaType, item.genre_ids),
+          top_cast: [],
+          director: null,
+          keywords: [],
+          tmdb_popularity: typeof item.popularity === 'number' ? item.popularity : null,
+          tmdb_rating: typeof item.vote_average === 'number' ? item.vote_average : null,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { data } = await admin
+          .from('titles')
+          .upsert(lightweight, { onConflict: 'tmdb_id,media_type' })
+          .select('*')
+          .single();
+        if (data) {
+          upserted.push(data as TitleRow);
+          addedForMedia += 1;
+        }
+      }
+
+      // Stop early once this media has enough new candidates.
+      if (addedForMedia >= DISCOVER_STOP_AT) break;
+    }
+  }
+
+  return upserted;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -898,12 +996,48 @@ Deno.serve(async (req: Request) => {
     (t) => !watched.has(t.id) && titleHasGenre(t, genreId),
   );
 
-  let notes: string[] = [];
+  const notes: string[] = [];
   const { headers: tmdbHeaders, apiKey } = tmdbAuth();
   const tmdbConfigured = Boolean(tmdbHeaders.Authorization || apiKey);
 
-  // Thin pool → enrich lightweight cache rows, then popular feed if needed.
-  if (candidates.length < MIN_POOL) {
+  function dedupeCandidates(rows: TitleRow[]): TitleRow[] {
+    const byId = new Map<string, TitleRow>();
+    for (const t of rows) byId.set(t.id, t);
+    return [...byId.values()];
+  }
+
+  /** Service-matched + not excluded — this is what the client pages / shuffles. */
+  function collectEligible(
+    rows: TitleRow[],
+  ): { title: TitleRow; services: ServiceCatalogRow[]; parts: ScoreParts }[] {
+    const out: { title: TitleRow; services: ServiceCatalogRow[]; parts: ScoreParts }[] = [];
+    for (const title of rows) {
+      if (excludeIds.has(title.id)) continue;
+      const services = matchTitleServices(
+        title,
+        memberServices,
+        catalogByProviderId,
+        catalogByService,
+      );
+      if (services.length === 0) continue;
+      if (media !== 'both' && title.media_type !== media) continue;
+      if (!titleHasGenre(title, genreId)) continue;
+      const parts = scoreTitle(title, affinity, coldStart);
+      // Soft-decay: keep eligible but push down the ranking for previously shown titles.
+      if (demoteIds.has(title.id)) {
+        parts.total *= DEMOTE_FACTOR;
+      }
+      out.push({ title, services, parts });
+    }
+    return out;
+  }
+
+  candidates = dedupeCandidates(candidates);
+  let eligible = collectEligible(candidates);
+
+  // Drive enrich/ingest off post-service eligible (after exclude), not raw candidate count.
+  // Prefetch with exclude_ids often leaves candidates ≥ MIN_POOL while eligible is thin.
+  if (eligible.length < MIN_POOL) {
     let lightQuery = admin
       .from('titles')
       .select(
@@ -915,16 +1049,31 @@ Deno.serve(async (req: Request) => {
     if (media === 'movie' || media === 'tv') {
       lightQuery = lightQuery.eq('media_type', media);
     }
+    // Push the genre filter into the DB query so a 40-row slice targets the
+    // requested chip instead of filtering to zero in-memory (ISSUE-005 gap).
+    if (genreId !== null) {
+      lightQuery = lightQuery.contains('genres', [{ id: genreId }]);
+    }
     const { data: lightTitles } = await lightQuery;
     const toEnrich = ((lightTitles ?? []) as TitleRow[])
-      .filter((t) => !watched.has(t.id) && titleHasGenre(t, genreId))
+      .filter(
+        (t) =>
+          !watched.has(t.id) &&
+          !excludeIds.has(t.id) &&
+          titleHasGenre(t, genreId),
+      )
       .slice(0, MAX_ENRICH);
 
     if (toEnrich.length > 0 && tmdbConfigured) {
       notes.push(`batch_enriched_${toEnrich.length}`);
       for (const light of toEnrich) {
         const enriched = await enrichTitle(admin, light.tmdb_id, light.media_type);
-        if (enriched && !watched.has(enriched.id) && titleHasGenre(enriched, genreId)) {
+        if (
+          enriched &&
+          !watched.has(enriched.id) &&
+          !excludeIds.has(enriched.id) &&
+          titleHasGenre(enriched, genreId)
+        ) {
           candidates.push(enriched);
         }
       }
@@ -932,47 +1081,60 @@ Deno.serve(async (req: Request) => {
       notes.push('enrich_skipped_tmdb_not_configured');
     }
 
-    if (candidates.length < MIN_POOL && tmdbConfigured) {
-      notes.push('popular_ingest');
-      const ingested = await ingestPopular(admin, media);
+    candidates = dedupeCandidates(candidates);
+    eligible = collectEligible(candidates);
+
+    if (eligible.length < MIN_POOL && tmdbConfigured) {
+      // Prefer TMDB discover scoped to the genre + members' supported providers
+      // when a genre chip is set — trending/week is genre-blind and starves
+      // narrow filters. Fall back to trending when there is no chip.
+      let ingested: TitleRow[] = [];
+      if (genreId !== null) {
+        const supportedProviderIds = [...memberServices]
+          .map((s) => catalogByService.get(s)?.tmdb_provider_id)
+          .filter((id): id is number => typeof id === 'number');
+        if (supportedProviderIds.length > 0) {
+          notes.push(`discover_ingest_g${genreId}`);
+          ingested = await ingestDiscoverByGenre(
+            admin,
+            media,
+            genreId,
+            supportedProviderIds,
+          );
+        } else {
+          notes.push('popular_ingest');
+          ingested = await ingestPopular(admin, media);
+        }
+      } else {
+        notes.push('popular_ingest');
+        ingested = await ingestPopular(admin, media);
+      }
+
       const enrichTargets = ingested
-        .filter((t) => !watched.has(t.id) && !t.providers_fetched_at)
+        .filter(
+          (t) =>
+            !watched.has(t.id) &&
+            !excludeIds.has(t.id) &&
+            !t.providers_fetched_at &&
+            titleHasGenre(t, genreId),
+        )
         .slice(0, MAX_ENRICH);
       for (const light of enrichTargets) {
         const enriched = await enrichTitle(admin, light.tmdb_id, light.media_type);
-        if (enriched && !watched.has(enriched.id) && titleHasGenre(enriched, genreId)) {
+        if (
+          enriched &&
+          !watched.has(enriched.id) &&
+          !excludeIds.has(enriched.id) &&
+          titleHasGenre(enriched, genreId)
+        ) {
           candidates.push(enriched);
         }
       }
-    } else if (candidates.length < MIN_POOL && !tmdbConfigured) {
+      candidates = dedupeCandidates(candidates);
+      eligible = collectEligible(candidates);
+    } else if (eligible.length < MIN_POOL && !tmdbConfigured) {
       notes.push('cold_start_quality_pop_only');
     }
-  }
-
-  // Dedupe by id.
-  const byId = new Map<string, TitleRow>();
-  for (const t of candidates) byId.set(t.id, t);
-  candidates = [...byId.values()];
-
-  // Eligibility: on ≥1 present member's services; skip session-excluded titles.
-  const eligible: { title: TitleRow; services: ServiceCatalogRow[]; parts: ScoreParts }[] = [];
-  for (const title of candidates) {
-    if (excludeIds.has(title.id)) continue;
-    const services = matchTitleServices(
-      title,
-      memberServices,
-      catalogByProviderId,
-      catalogByService,
-    );
-    if (services.length === 0) continue;
-    if (media !== 'both' && title.media_type !== media) continue;
-    if (!titleHasGenre(title, genreId)) continue;
-    const parts = scoreTitle(title, affinity, coldStart);
-    // Soft-decay: keep eligible but push down the ranking for previously shown titles.
-    if (demoteIds.has(title.id)) {
-      parts.total *= DEMOTE_FACTOR;
-    }
-    eligible.push({ title, services, parts });
   }
 
   eligible.sort((a, b) => b.parts.total - a.parts.total);
