@@ -3,6 +3,10 @@
 // unwatched titles (on ≥1 present member's streaming service), and returns a
 // ranked list for Top 3 + shuffle. Service-role for bulk read/enrich.
 //
+// Request body extras (optional):
+//   exclude_ids?: string[]  — hard-skip (already in client buffer / shuffled past)
+//   demote_ids?: string[]   — soft-decay score (* DEMOTE_FACTOR) so resurfacing is rare
+//
 // verify_jwt is enabled at the gateway; we re-derive the caller from their JWT.
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -75,6 +79,10 @@ const MIN_POOL = 12;
 const RETURN_LIMIT_DEFAULT = 12;
 const MAX_ENRICH = 15;
 const MAX_POPULAR_INGEST = 20;
+/** Soft-decay multiplier for titles the client already surfaced this session. */
+const DEMOTE_FACTOR = 0.35;
+/** Cap client-supplied UUID lists so a huge payload cannot blow ranking. */
+const MAX_ID_LIST = 120;
 
 const SERVICE_PROVIDER_KEYWORDS: Record<string, string[]> = {
   netflix: ['netflix'],
@@ -741,6 +749,8 @@ Deno.serve(async (req: Request) => {
     genre_id?: unknown;
     offset?: unknown;
     limit?: unknown;
+    exclude_ids?: unknown;
+    demote_ids?: unknown;
   };
   try {
     body = await req.json();
@@ -762,6 +772,19 @@ Deno.serve(async (req: Request) => {
     typeof body.limit === 'number' && body.limit > 0
       ? Math.min(30, Math.floor(body.limit))
       : RETURN_LIMIT_DEFAULT;
+
+  /** Hard-exclude: already in the client's buffer / shuffled past this session. */
+  const excludeIds = new Set(
+    (Array.isArray(body.exclude_ids) ? body.exclude_ids : [])
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      .slice(0, MAX_ID_LIST),
+  );
+  /** Soft-decay: previously shown; still eligible but ranked lower. */
+  const demoteIds = new Set(
+    (Array.isArray(body.demote_ids) ? body.demote_ids : [])
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      .slice(0, MAX_ID_LIST),
+  );
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -931,9 +954,10 @@ Deno.serve(async (req: Request) => {
   for (const t of candidates) byId.set(t.id, t);
   candidates = [...byId.values()];
 
-  // Eligibility: on ≥1 present member's services.
+  // Eligibility: on ≥1 present member's services; skip session-excluded titles.
   const eligible: { title: TitleRow; services: ServiceCatalogRow[]; parts: ScoreParts }[] = [];
   for (const title of candidates) {
+    if (excludeIds.has(title.id)) continue;
     const services = matchTitleServices(
       title,
       memberServices,
@@ -944,6 +968,10 @@ Deno.serve(async (req: Request) => {
     if (media !== 'both' && title.media_type !== media) continue;
     if (!titleHasGenre(title, genreId)) continue;
     const parts = scoreTitle(title, affinity, coldStart);
+    // Soft-decay: keep eligible but push down the ranking for previously shown titles.
+    if (demoteIds.has(title.id)) {
+      parts.total *= DEMOTE_FACTOR;
+    }
     eligible.push({ title, services, parts });
   }
 

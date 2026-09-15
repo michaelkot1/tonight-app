@@ -1,7 +1,7 @@
 # PLAN.md — Tonight (phased build plan)
 
 > Working proposal from the orchestrator. Companion docs: [`spec.md`](spec.md), [`design.md`](design.md), [`AGENTS.md`](AGENTS.md).
-> Status: **Saved tab UI shell on `cursor/saved-tab` (placeholder empty-state; no persistence). Browse tab UI shell carried from `cursor/browse-tab`. Visible tabs `Home → Decide FAB → Search` (Saved/Profile/Friends hidden from tab bar). Phase 5 Wave 1 on `cursor/phase-5-decider` (pending owner smoke-test). Phase 4 Wave 1 + Wave 2 on `cursor/phase-4-friends-invites`. Phase 3 client complete (pending owner TMDB/OMDb Edge secrets). Apple/Google OAuth + notifications OS prompt deferred. Phase 1 + Phase 0 done.**
+> Status: **Saved bookmarks on `cursor/bookmarks-saved` (`saves` table + Saved list + title bookmark affordances). Browse tab UI shell carried from `cursor/browse-tab`. Visible tabs `Home → Decide FAB → Search` (Saved/Profile/Friends hidden from tab bar). Phase 5 Wave 1 on `cursor/phase-5-decider` (pending owner smoke-test). Phase 4 Wave 1 + Wave 2 on `cursor/phase-4-friends-invites`. Phase 3 client complete (pending owner TMDB/OMDb Edge secrets). Apple/Google OAuth + notifications OS prompt deferred. Phase 1 + Phase 0 done.**
 
 This plan is intentionally phased and top-down. Each phase produces reviewable, mergeable work on a feature branch (never `main`). Exploration → `scout`, implementation → `implementer`, review → orchestrator (main agent).
 
@@ -170,13 +170,31 @@ score =  w_genre   * genreMatch(title, groupProfile)      // primary signal
 - Setup UX polish: genre chips wrap (no horizontal scroll); “Find tonight's picks” pinned in a tab-bar-clearing footer (`spacing.navContent`); results step still full-page scroll.
 - **Blocker (owner):** same Edge secrets as Phase 3 (`TMDB_READ_ACCESS_TOKEN` / `TMDB_API_KEY` + `OMDB_API_KEY`) for enrichment when the cached enriched pool is thin (~5/69). Ranking still runs on already-enriched rows.
 
+### Decider fresh shuffle
+
+**Status:** 🟢 Implemented on `cursor/decider-fresh-shuffle` (from `cursor/search-stories`; pending owner smoke-test).
+- **Edge (`decider-rank` v6):** optional `exclude_ids` (hard-skip, capped 120) + `demote_ids` (score × 0.35 soft-decay).
+- **Client:** session seen set for displayed pages; buffer `exclude_ids` on prefetch/shuffle so shuffled-past titles don’t resurface; `ensureBuffer` prefetches when remaining < 6 (and force-fetch when Shuffle needs more); no longer hard-stops after the first 12; New setup / re-Decide folds seen IDs into `demote_ids` so a fresh Find ranks them lower instead of repeating the same Top 3; end copy: “No more fresh picks…”.
+- Prefetch uses direct `invokeDeciderRank` so background fetches don’t flip mutation loading.
+- Verify: `tsc` + `expo lint` clean.
+
 ## Browse tab (UI shell)
 
 **Status:** ✅ UI shell on `cursor/browse-tab` (carried on `cursor/saved-tab`). Visible tabs `Home → Decide FAB → Search` (route still `browse`; Saved/Profile/Friends hidden from tab bar). Search field pushes `routes.search`; genre chips local-select only; category cards pressable stubs (no feeds yet). Supersedes Phase 3 “no 4th tab” for this surface.
 
-## Saved tab (UI shell)
+### Search category stories
 
-**Status:** ✅ UI shell on `cursor/saved-tab`. Placeholder empty-state only (bookmark icon + copy). No save affordances on titles, no persistence, no data wiring yet.
+**Status:** 🟢 Implemented on `cursor/search-stories` (from `cursor/bookmarks-saved`; pending owner smoke-test).
+- **Backend (deployed):** `tmdb-popular` extended with a `feed` (`trending` / `new` / `top_rated` / `popular` / `discover`) + `genre_id` param (backward-compatible; default `trending`/`all`) and now returns `genres` + `runtime`; `tmdb-title` enriches a new `titles.runtime` column (movie `runtime`, TV first `episode_run_time`); migration `add_runtime_to_titles`; types regenerated.
+- **Categories:** `src/lib/categories.ts` — 8 feed-backed cards shared by the Browse grid + Story viewer (Trending Now, New Releases, Critically Acclaimed, Popular Now, Comedy Gold, Chills & Thrills, Sci-Fi & Beyond, Date Night). `CategoryCard` reworked (icon + label + blurb) and pushes `routes.story(slug)`.
+- **Feed hook:** `useCategoryFeed` calls `tmdb-popular`; on error (`tmdb_not_configured`) or empty, falls back to a cached-`titles` query (genre/media filtered, popularity-ordered) so cards populate from the ~198 cached rows even without TMDB secrets.
+- **Story viewer:** `src/app/story/[category].tsx` + `src/screens/story/*` — full-screen root Stack route. Segmented Reanimated progress bar (one bar per title, 5s linear fill, auto-advance; auto-closes after the last). Full-bleed `expo-image` art + gradient scrims. Right tap → next, left tap → restart-or-previous (Instagram rule), hold-anywhere → pause with “Paused” hint (focus-blur pauses silently). Bottom overlay: gold rating, hero title, `year · runtime · genres`, synopsis, where-to-watch chips (from enriched providers), **View details** pill → `routes.title(id)`, and the ember `SaveControl` bookmark. Best-effort ArrowLeft/Right/Escape on web.
+- **Verify:** `tsc`, `expo lint`, `expo export --platform ios` all clean.
+- **Depends on (owner):** same Edge secrets as Phase 3/5 (`TMDB_READ_ACCESS_TOKEN`/`TMDB_API_KEY` + `OMDB_API_KEY`) for live feeds + runtime/provider enrichment; without them stories fall back to cached titles and omit runtime/where-to-watch until enriched.
+
+## Saved tab
+
+**Status:** ✅ Persistence + UI on `cursor/bookmarks-saved`. `public.saves` (self-only RLS); hooks `useMySaves` / `useToggleSave`; bookmark on title detail, posters, hero, search rows, decider picks; Saved screen Movies | TV (newest-first). Tab stays hidden from tab bar (`href: null`); Home header entry remains.
 
 ## Phase 6 — Polish, notifications & release prep
 

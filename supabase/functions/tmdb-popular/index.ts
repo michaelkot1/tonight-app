@@ -1,8 +1,15 @@
 // Tonight — tmdb-popular edge function.
-// Fetches TMDB trending (movie + tv) for Home + onboarding taste-seed, upserts
-// lightweight `titles` cache rows with the service role (clients have select-only
-// RLS on `titles`), and returns the local UUID + poster fields — mirroring the
-// `tmdb-search` result shape so the client can reuse the same rendering path.
+// Powers the Home rails, onboarding taste-seed, and the Search-tab category
+// stories. Fetches a TMDB list feed (trending / new releases / top rated /
+// popular / genre discover), upserts lightweight `titles` cache rows with the
+// service role (clients have select-only RLS on `titles`), and returns the
+// local UUID + poster fields — mirroring the `tmdb-search` result shape so the
+// client can reuse the same rendering path.
+//
+// Request body (all optional):
+//   { feed?: 'trending'|'new'|'top_rated'|'popular'|'discover',
+//     media_type?: 'movie'|'tv'|'all', genre_id?: number, page?: number }
+// Defaults to feed='trending', media_type='all' (backward-compatible).
 //
 // verify_jwt is enabled at the gateway; we re-derive the caller from their JWT
 // (mirrors delete-account / tmdb-search) so only authenticated users can call it.
@@ -17,7 +24,7 @@ const corsHeaders = {
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
 // TMDB genre id → name maps (stable, small — lets us store genre names from the
-// lightweight trending payload, which only returns `genre_ids`).
+// lightweight list payloads, which only return `genre_ids`).
 const MOVIE_GENRES: Record<number, string> = {
   28: 'Action',
   12: 'Adventure',
@@ -61,8 +68,11 @@ const TV_GENRES: Record<number, string> = {
 
 type MediaType = 'movie' | 'tv';
 type MediaFilter = 'movie' | 'tv' | 'all';
+type Feed = 'trending' | 'new' | 'top_rated' | 'popular' | 'discover';
 
-interface TmdbTrendingResult {
+const FEEDS: readonly Feed[] = ['trending', 'new', 'top_rated', 'popular', 'discover'];
+
+interface TmdbListResult {
   id: number;
   media_type?: string;
   title?: string;
@@ -106,16 +116,47 @@ function tmdbAuth(): { headers: Record<string, string>; apiKey: string | null } 
   return { headers, apiKey };
 }
 
-/** Fetch one TMDB trending endpoint, tagging each item with `media_type`. */
-async function fetchTrending(
-  window: 'movie' | 'tv' | 'all',
+/** Resolve a (feed, media) pair to a TMDB list endpoint path. */
+function feedPath(feed: Feed, media: MediaType): string {
+  switch (feed) {
+    case 'new':
+      return media === 'movie' ? 'movie/now_playing' : 'tv/on_the_air';
+    case 'top_rated':
+      return media === 'movie' ? 'movie/top_rated' : 'tv/top_rated';
+    case 'popular':
+      return media === 'movie' ? 'movie/popular' : 'tv/popular';
+    case 'discover':
+      return media === 'movie' ? 'discover/movie' : 'discover/tv';
+    case 'trending':
+    default:
+      return `trending/${media}/week`;
+  }
+}
+
+/**
+ * Fetch one media-specific TMDB list endpoint, tagging each item with
+ * `media_type` (list endpoints omit it for the single-media feeds).
+ */
+async function fetchFeed(
+  feed: Feed,
+  media: MediaType,
+  genreId: number | null,
   page: number,
   headers: Record<string, string>,
   apiKey: string | null,
-): Promise<TmdbTrendingResult[]> {
-  const url = new URL(`${TMDB_BASE}/trending/${window}/week`);
+): Promise<TmdbListResult[]> {
+  const url = new URL(`${TMDB_BASE}/${feedPath(feed, media)}`);
   url.searchParams.set('page', String(page));
   url.searchParams.set('language', 'en-US');
+  if (feed === 'new' && media === 'movie') {
+    url.searchParams.set('region', 'US');
+  }
+  if (feed === 'discover') {
+    url.searchParams.set('sort_by', 'popularity.desc');
+    url.searchParams.set('vote_count.gte', '80');
+    url.searchParams.set('include_adult', 'false');
+    if (genreId) url.searchParams.set('with_genres', String(genreId));
+  }
   if (!headers.Authorization && apiKey) {
     url.searchParams.set('api_key', apiKey);
   }
@@ -125,14 +166,21 @@ async function fetchTrending(
     const detail = await res.text();
     throw new Error(`tmdb_error:${res.status}:${detail}`);
   }
-  const data = (await res.json()) as { results?: TmdbTrendingResult[] };
+  const data = (await res.json()) as { results?: TmdbListResult[] };
   const results = Array.isArray(data.results) ? data.results : [];
-  // `/trending/{movie|tv}/week` items omit media_type; inject it. `/trending/all`
-  // items already carry it.
-  if (window !== 'all') {
-    return results.map((r) => ({ ...r, media_type: window }));
+  // List endpoints are media-specific and omit media_type; inject it.
+  return results.map((r) => ({ ...r, media_type: media }));
+}
+
+/** Interleave two lists so a mixed feed isn't dominated by one media type. */
+function interleave<T>(a: T[], b: T[]): T[] {
+  const out: T[] = [];
+  const max = Math.max(a.length, b.length);
+  for (let i = 0; i < max; i++) {
+    if (a[i]) out.push(a[i]);
+    if (b[i]) out.push(b[i]);
   }
-  return results;
+  return out;
 }
 
 Deno.serve(async (req: Request) => {
@@ -162,7 +210,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'unauthorized' }, 401);
   }
 
-  let body: { media_type?: unknown; page?: unknown };
+  let body: { feed?: unknown; media_type?: unknown; genre_id?: unknown; page?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -170,8 +218,13 @@ Deno.serve(async (req: Request) => {
     body = {};
   }
 
+  const feed: Feed = FEEDS.includes(body.feed as Feed) ? (body.feed as Feed) : 'trending';
   const mediaType: MediaFilter =
     body.media_type === 'movie' || body.media_type === 'tv' ? body.media_type : 'all';
+  const genreId =
+    typeof body.genre_id === 'number' && Number.isFinite(body.genre_id)
+      ? Math.floor(body.genre_id)
+      : null;
   const page = typeof body.page === 'number' && body.page > 0 ? Math.floor(body.page) : 1;
 
   const { headers, apiKey } = tmdbAuth();
@@ -179,23 +232,16 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'tmdb_not_configured' }, 500);
   }
 
-  let rawResults: TmdbTrendingResult[];
+  let rawResults: TmdbListResult[];
   try {
     if (mediaType === 'all') {
-      // Interleave movie + tv trending so a mixed feed isn't dominated by one.
       const [movies, shows] = await Promise.all([
-        fetchTrending('movie', page, headers, apiKey),
-        fetchTrending('tv', page, headers, apiKey),
+        fetchFeed(feed, 'movie', genreId, page, headers, apiKey),
+        fetchFeed(feed, 'tv', genreId, page, headers, apiKey),
       ]);
-      const interleaved: TmdbTrendingResult[] = [];
-      const max = Math.max(movies.length, shows.length);
-      for (let i = 0; i < max; i++) {
-        if (movies[i]) interleaved.push(movies[i]);
-        if (shows[i]) interleaved.push(shows[i]);
-      }
-      rawResults = interleaved;
+      rawResults = interleave(movies, shows);
     } else {
-      rawResults = await fetchTrending(mediaType, page, headers, apiKey);
+      rawResults = await fetchFeed(feed, mediaType, genreId, page, headers, apiKey);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'tmdb_error';
@@ -204,7 +250,7 @@ Deno.serve(async (req: Request) => {
 
   // Keep only movie/tv results with a title.
   const filtered = rawResults.filter(
-    (r): r is TmdbTrendingResult & { media_type: MediaType } =>
+    (r): r is TmdbListResult & { media_type: MediaType } =>
       (r.media_type === 'movie' || r.media_type === 'tv') && Boolean(r.title || r.name),
   );
 
@@ -256,14 +302,14 @@ Deno.serve(async (req: Request) => {
     .from('titles')
     .upsert(rows, { onConflict: 'tmdb_id,media_type' })
     .select(
-      'id, tmdb_id, media_type, title, poster_path, backdrop_path, release_date, tmdb_rating, overview',
+      'id, tmdb_id, media_type, title, poster_path, backdrop_path, release_date, tmdb_rating, overview, genres, runtime',
     );
 
   if (upsertError) {
     return json({ error: 'upsert_failed', detail: upsertError.message }, 500);
   }
 
-  // Return in TMDB trending order.
+  // Return in TMDB list order.
   const byKey = new Map(
     (upserted ?? []).map((row) => [`${row.media_type}:${row.tmdb_id}`, row]),
   );

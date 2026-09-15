@@ -6,7 +6,8 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import type { Tables } from '@/lib/database.types';
+import type { BrowseCategory, CategoryFeed } from '@/lib/categories';
+import type { Json, Tables } from '@/lib/database.types';
 import { invokeEdgeFunction } from '@/lib/edge';
 import { getSupabase } from '@/lib/supabase';
 import { isTitleEnriched, type MediaType, type Title, type Verdict } from '@/lib/titles';
@@ -23,6 +24,10 @@ export interface TitleSearchResult {
   release_date: string | null;
   tmdb_rating: number | null;
   overview: string | null;
+  /** Present on `tmdb-popular` category feeds (optional for other consumers). */
+  genres?: Json;
+  /** Present on `tmdb-popular` category feeds (optional for other consumers). */
+  runtime?: number | null;
 }
 
 interface TmdbSearchResponse {
@@ -48,6 +53,7 @@ export const titleSearchQueryKey = (query: string) => ['title-search', query] as
 export const popularTitlesQueryKey = (mediaType: PopularMediaFilter) =>
   ['popular-titles', mediaType] as const;
 export const myRatingsQueryKey = (userId: string | undefined) => ['my-ratings', userId] as const;
+export const mySavesQueryKey = (userId: string | undefined) => ['my-saves', userId] as const;
 
 /** Debounce a rapidly-changing value (search box keystrokes). */
 export function useDebouncedValue<T>(value: T, delay = SEARCH_DEBOUNCE_MS): T {
@@ -97,6 +103,84 @@ export function usePopularTitles(
         { media_type: PopularMediaFilter }
       >('tmdb-popular', { media_type: mediaType });
       return response.results ?? [];
+    },
+  });
+}
+
+export const categoryFeedQueryKey = (slug: string) => ['category-feed', slug] as const;
+
+/**
+ * Fallback for `useCategoryFeed`: read straight from the cached `titles` table
+ * (RLS is select-only, so this is allowed) when the Edge Function is
+ * unavailable or returns nothing. Ordered by TMDB popularity.
+ */
+async function fetchCachedCategoryTitles(
+  category: BrowseCategory,
+): Promise<TitleSearchResult[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  let query = supabase
+    .from('titles')
+    .select(
+      'id, tmdb_id, media_type, title, poster_path, backdrop_path, release_date, tmdb_rating, overview, genres, runtime',
+    );
+
+  if (category.media && category.media !== 'all') {
+    query = query.eq('media_type', category.media);
+  }
+  if (category.genreId != null) {
+    query = query.contains('genres', [{ id: category.genreId }]);
+  }
+
+  const { data, error } = await query
+    .order('tmdb_popularity', { ascending: false, nullsFirst: false })
+    .limit(24);
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    tmdb_id: row.tmdb_id,
+    media_type: row.media_type as MediaType,
+    title: row.title,
+    poster_path: row.poster_path,
+    backdrop_path: row.backdrop_path,
+    release_date: row.release_date,
+    tmdb_rating: row.tmdb_rating,
+    overview: row.overview,
+    genres: row.genres,
+    runtime: row.runtime,
+  }));
+}
+
+/**
+ * Titles for a Browse category (powers the Story viewer). Tries the
+ * `tmdb-popular` Edge Function first; if it throws (e.g. `tmdb_not_configured`)
+ * or returns no results, falls back to the cached `titles` table.
+ */
+export function useCategoryFeed(
+  category: BrowseCategory,
+): UseQueryResult<TitleSearchResult[]> {
+  return useQuery({
+    queryKey: categoryFeedQueryKey(category.slug),
+    staleTime: 1000 * 60 * 30,
+    queryFn: async (): Promise<TitleSearchResult[]> => {
+      try {
+        const response = await invokeEdgeFunction<
+          TmdbPopularResponse,
+          { feed: CategoryFeed; media_type: 'movie' | 'tv' | 'all'; genre_id: number | null }
+        >('tmdb-popular', {
+          feed: category.feed,
+          media_type: category.media ?? 'all',
+          genre_id: category.genreId ?? null,
+        });
+        if (response.results && response.results.length > 0) {
+          return response.results;
+        }
+      } catch {
+        // Edge unavailable (e.g. tmdb_not_configured) — fall through to cache.
+      }
+      return fetchCachedCategoryTitles(category);
     },
   });
 }
@@ -216,6 +300,102 @@ export function useRateTitle() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: myRatingsQueryKey(user?.id) });
+    },
+  });
+}
+
+/** A save joined with the poster fields needed to render it in a list. */
+export interface MySave {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  title: Pick<
+    Tables<'titles'>,
+    | 'id'
+    | 'title'
+    | 'media_type'
+    | 'poster_path'
+    | 'genres'
+    | 'tmdb_rating'
+    | 'imdb_rating'
+    | 'release_date'
+  > | null;
+}
+
+/** The signed-in user's saves, newest first, joined with title poster fields. */
+export function useMySaves(): UseQueryResult<MySave[]> {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: mySavesQueryKey(user?.id),
+    enabled: !!user?.id,
+    queryFn: async (): Promise<MySave[]> => {
+      const supabase = getSupabase();
+      if (!supabase || !user?.id) return [];
+      const { data, error } = await supabase
+        .from('saves')
+        .select(
+          'id, created_at, updated_at, title:titles(id, title, media_type, poster_path, genres, tmdb_rating, imdb_rating, release_date)',
+        )
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as MySave[];
+    },
+  });
+}
+
+interface ToggleSaveInput {
+  titleId: string;
+  /** When set, forces save (`true`) or unsave (`false`). Otherwise toggles. */
+  saved?: boolean;
+}
+
+/**
+ * Insert or delete the signed-in user's save for a title. Upserts on the
+ * `(user_id, title_id)` unique constraint when saving; deletes when unsaving.
+ * Invalidates the affected `my-saves` cache on success.
+ */
+export function useToggleSave() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ titleId, saved }: ToggleSaveInput) => {
+      const supabase = getSupabase();
+      if (!supabase || !user?.id) throw new Error('Not signed in');
+      const userId = user.id;
+
+      let nextSaved = saved;
+      if (nextSaved === undefined) {
+        const { data: existing, error: lookupError } = await supabase
+          .from('saves')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('title_id', titleId)
+          .maybeSingle();
+        if (lookupError) throw lookupError;
+        nextSaved = !existing;
+      }
+
+      if (!nextSaved) {
+        const { error } = await supabase
+          .from('saves')
+          .delete()
+          .eq('user_id', userId)
+          .eq('title_id', titleId);
+        if (error) throw error;
+        return { titleId, saved: false } as const;
+      }
+
+      const { error } = await supabase.from('saves').upsert(
+        { user_id: userId, title_id: titleId, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id,title_id' },
+      );
+      if (error) throw error;
+      return { titleId, saved: true } as const;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: mySavesQueryKey(user?.id) });
     },
   });
 }

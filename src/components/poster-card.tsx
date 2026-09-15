@@ -19,6 +19,8 @@ interface PosterCardProps {
   onPress?: () => void;
   /** Overlay slot for overlapping friend avatars, bottom-left on the artwork. */
   friendPile?: ReactNode;
+  /** Overlay action (e.g. bookmark), top-left on the artwork. */
+  action?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -34,6 +36,7 @@ export function PosterCard({
   rating,
   onPress,
   friendPile,
+  action,
   style,
 }: PosterCardProps) {
   const meta = genres && genres.length > 0 ? formatGenreMeta(genres) : null;
@@ -58,6 +61,8 @@ export function PosterCard({
             </ThemedText>
           </View>
         )}
+
+        {action ? <View style={styles.action}>{action}</View> : null}
 
         {showRating ? (
           <View style={styles.badge}>
@@ -121,6 +126,12 @@ const styles = StyleSheet.create({
   fallbackText: {
     textAlign: 'center',
     color: colors.textMuted,
+  },
+  action: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    zIndex: 2,
   },
   badge: {
     position: 'absolute',

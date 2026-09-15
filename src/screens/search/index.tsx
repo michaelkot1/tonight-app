@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { SaveControl } from '@/components/bookmark-button';
 import { TextInput } from '@/components/text-input';
 import { ThemedText } from '@/components/themed-text';
 import { useTitleSearch, type TitleSearchResult } from '@/hooks/use-titles';
@@ -81,7 +82,7 @@ function SearchResultRow({
         </View>
       ) : null}
 
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      <SaveControl titleId={result.id} size="sm" />
     </Pressable>
   );
 }

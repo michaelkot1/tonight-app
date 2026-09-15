@@ -1,28 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Chip } from '@/components/chip';
 import { ThemedText } from '@/components/themed-text';
-import { DECIDER_GENRE_CHIPS } from '@/lib/decider';
+import { BROWSE_CATEGORIES } from '@/lib/categories';
 import { routes } from '@/lib/routes';
 import { colors, radius, spacing } from '@/theme';
 
 import { CategoryCard } from './category-card';
 
-const CATEGORIES = [
-  'Trending Now',
-  'New Releases',
-  'Watch with Friends',
-  'Comedy Gold',
-] as const;
-
 export function BrowseScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [selectedGenreId, setSelectedGenreId] = useState<number | null>(null);
 
   function openSearch() {
     router.push(routes.search);
@@ -54,25 +44,13 @@ export function BrowseScreen() {
         <ThemedText style={styles.searchPlaceholder}>Search titles</ThemedText>
       </Pressable>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.genreRow}
-        style={styles.genreScroll}
-      >
-        {DECIDER_GENRE_CHIPS.map((g) => (
-          <Chip
-            key={g.label}
-            label={g.label}
-            selected={selectedGenreId === g.id}
-            onPress={() => setSelectedGenreId(g.id)}
-          />
-        ))}
-      </ScrollView>
-
       <View style={styles.grid}>
-        {CATEGORIES.map((label) => (
-          <CategoryCard key={label} label={label} />
+        {BROWSE_CATEGORIES.map((category) => (
+          <CategoryCard
+            key={category.slug}
+            category={category}
+            onPress={() => router.push(routes.story(category.slug))}
+          />
         ))}
       </View>
     </ScrollView>
@@ -105,15 +83,6 @@ const styles = StyleSheet.create({
   },
   searchPlaceholder: {
     color: colors.textMuted,
-  },
-  genreScroll: {
-    marginHorizontal: -spacing.inset,
-  },
-  genreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.inset,
   },
   grid: {
     flexDirection: 'row',

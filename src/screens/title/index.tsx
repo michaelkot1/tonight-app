@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { SaveControl } from '@/components/bookmark-button';
 import { FriendPile } from '@/components/friend-pile';
 import { RatingControl } from '@/components/rating-control';
 import { ThemedText } from '@/components/themed-text';
@@ -167,7 +168,10 @@ export function TitleDetailScreen() {
           ) : null}
 
           <View style={styles.rateBlock}>
-            <ThemedText variant="sectionRail">Your rating</ThemedText>
+            <View style={styles.rateHeader}>
+              <ThemedText variant="sectionRail">Your rating</ThemedText>
+              <SaveControl titleId={title.id} size="md" />
+            </View>
             <RatingControl
               value={currentVerdict}
               onChange={handleRate}
@@ -341,6 +345,11 @@ const styles = StyleSheet.create({
   },
   rateBlock: {
     gap: spacing.md,
+  },
+  rateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   section: {
     gap: spacing.sm,
