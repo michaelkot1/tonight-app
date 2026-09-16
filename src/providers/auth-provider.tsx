@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 
+import { signInWithApple as signInWithAppleNative } from '@/lib/auth-apple';
 import { hasSupabaseEnv } from '@/lib/env';
 import { flushPendingInvite } from '@/lib/pending-invite';
 import { getSupabase } from '@/lib/supabase';
@@ -23,6 +24,11 @@ import {
 
 interface AuthResult {
   error: string | null;
+}
+
+interface AppleAuthResult extends AuthResult {
+  /** User dismissed the Apple sheet — do not surface as an error. */
+  canceled: boolean;
 }
 
 interface SignUpResult extends AuthResult {
@@ -46,6 +52,8 @@ interface AuthContextValue {
   profileLoading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<AuthResult>;
   signUpWithEmail: (email: string, password: string) => Promise<SignUpResult>;
+  /** Native Sign in with Apple (iOS). Soft-cancels when the user dismisses. */
+  signInWithApple: () => Promise<AppleAuthResult>;
   /** Confirm signup with the 6-digit email OTP (SMTP template). */
   verifyEmailOtp: (email: string, token: string) => Promise<AuthResult>;
   /** Resend the signup confirmation email (OTP code via SMTP). */
@@ -162,6 +170,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [supabase],
   );
 
+  const signInWithApple = useCallback(async (): Promise<AppleAuthResult> => {
+    if (!supabase) {
+      return { error: NOT_CONFIGURED_ERROR, canceled: false };
+    }
+    const result = await signInWithAppleNative(supabase);
+    if (!result.error && !result.canceled) {
+      // Name may have been written to profiles after the insert trigger.
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    }
+    return result;
+  }, [supabase, queryClient]);
+
   const signUpWithEmail = useCallback(
     async (email: string, password: string): Promise<SignUpResult> => {
       if (!supabase) {
@@ -249,6 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profileLoading: profileQuery.isLoading,
       signInWithEmail,
       signUpWithEmail,
+      signInWithApple,
       verifyEmailOtp,
       resendConfirmationEmail,
       signOut,
@@ -263,6 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profileQuery.isLoading,
       signInWithEmail,
       signUpWithEmail,
+      signInWithApple,
       verifyEmailOtp,
       resendConfirmationEmail,
       signOut,

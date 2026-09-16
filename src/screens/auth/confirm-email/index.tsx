@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
@@ -71,73 +72,84 @@ export function ConfirmEmailScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          {
-            paddingTop: insets.top + spacing.header,
-            paddingBottom: insets.bottom + spacing.xxxl,
-          },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <View style={styles.root}>
+      <LinearGradient
+        colors={[colors.shell, colors.bg, colors.bg]}
+        locations={[0, 0.45, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={styles.bloomGreen} pointerEvents="none" />
+      <View style={styles.bloomPurple} pointerEvents="none" />
+
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.header}>
-          <ThemedText variant="heroTitle">Enter your code</ThemedText>
-          <ThemedText variant="metadata">
-            {email
-              ? `We sent a 6-digit code to ${email}. Enter it below to confirm your account.`
-              : 'We sent a 6-digit code to your email. Enter it below to confirm your account.'}
-          </ThemedText>
-        </View>
-
-        <View style={styles.form}>
-          <TextInput
-            label="Confirmation code"
-            value={digits}
-            onChangeText={(text) => {
-              setCode(text.replace(/\D/g, '').slice(0, 6));
-              setError(null);
-            }}
-            placeholder="000000"
-            keyboardType="number-pad"
-            textContentType="oneTimeCode"
-            autoComplete="one-time-code"
-            maxLength={6}
-            editable={isConfigured}
-            error={error ?? undefined}
-            helper={info ?? undefined}
-          />
-          <Button
-            label="Confirm account"
-            onPress={handleVerify}
-            disabled={!canSubmit}
-            loading={submitting}
-          />
-          <Button
-            label="Resend code"
-            variant="secondary"
-            onPress={handleResend}
-            disabled={!isConfigured || !email || submitting}
-            loading={submitting}
-          />
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.replace(routes.auth)}
-          style={styles.toggle}
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            {
+              paddingTop: insets.top + spacing.header,
+              paddingBottom: insets.bottom + spacing.xxxl,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <ThemedText variant="caption" style={styles.toggleText}>
-            Use a different email
-          </ThemedText>
-        </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <View style={styles.header}>
+            <ThemedText variant="heroTitle">Enter your code</ThemedText>
+            <ThemedText variant="metadata" style={styles.subtitle}>
+              {email
+                ? `We sent a 6-digit code to ${email}. Enter it below to confirm your account.`
+                : 'We sent a 6-digit code to your email. Enter it below to confirm your account.'}
+            </ThemedText>
+          </View>
+
+          <View style={styles.form}>
+            <TextInput
+              label="Confirmation code"
+              value={digits}
+              onChangeText={(text) => {
+                setCode(text.replace(/\D/g, '').slice(0, 6));
+                setError(null);
+              }}
+              placeholder="000000"
+              keyboardType="number-pad"
+              textContentType="oneTimeCode"
+              autoComplete="one-time-code"
+              maxLength={6}
+              editable={isConfigured}
+              error={error ?? undefined}
+              helper={info ?? undefined}
+            />
+            <Button
+              label="Confirm account"
+              onPress={handleVerify}
+              disabled={!canSubmit}
+              loading={submitting}
+            />
+            <Button
+              label="Resend code"
+              variant="secondary"
+              onPress={handleResend}
+              disabled={!isConfigured || !email || submitting}
+              loading={submitting}
+            />
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.replace(routes.auth)}
+            style={styles.toggle}
+          >
+            <ThemedText variant="caption" style={styles.toggleText}>
+              Use a different email
+            </ThemedText>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -146,12 +158,40 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
+  flex: {
+    flex: 1,
+  },
+  bloomGreen: {
+    position: 'absolute',
+    top: -80,
+    right: -60,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: colors.ambientGreen,
+    opacity: 0.12,
+  },
+  bloomPurple: {
+    position: 'absolute',
+    bottom: '18%',
+    left: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: colors.ambientPurple,
+    opacity: 0.85,
+  },
   content: {
+    flexGrow: 1,
     paddingHorizontal: spacing.inset,
+    justifyContent: 'center',
     gap: spacing.rail,
   },
   header: {
     gap: spacing.sm,
+  },
+  subtitle: {
+    color: colors.textMuted,
   },
   form: {
     gap: spacing.lg,
@@ -160,6 +200,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toggleText: {
-    color: colors.textPrimary,
+    color: colors.textMuted,
   },
 });

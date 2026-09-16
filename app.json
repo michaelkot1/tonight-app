@@ -8,6 +8,8 @@
     "scheme": "tonight",
     "userInterfaceStyle": "dark",
     "ios": {
+      "bundleIdentifier": "com.codewithmikey.tonight-app",
+      "usesAppleSignIn": true,
       "icon": "./assets/expo.icon",
       "supportsTablet": false,
       "infoPlist": {
@@ -42,6 +44,7 @@
       ],
       "expo-secure-store",
       "expo-font",
+      "expo-apple-authentication",
       [
         "expo-contacts",
         {
