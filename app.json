@@ -21,7 +21,9 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "permissions": ["READ_CONTACTS"],
+      "permissions": [
+        "READ_CONTACTS"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -34,8 +36,8 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#050506",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "image": "./assets/images/tonight-logo.png",
+          "imageWidth": 200
         }
       ],
       "expo-secure-store",

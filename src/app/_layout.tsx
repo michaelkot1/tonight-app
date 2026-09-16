@@ -13,9 +13,10 @@ import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import { View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
+import { AnimatedSplash } from '@/components/animated-splash';
 import { queryClient } from '@/lib/query-client';
 import { routes } from '@/lib/routes';
 import { AuthProvider, useAuth } from '@/providers/auth-provider';
@@ -52,16 +53,15 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
   const { session, loading, onboardedAt, profileLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [splashVisible, setSplashVisible] = useState(true);
 
   // Wait for fonts + initial auth; when signed in, also wait for the profile row
   // so we don't flash the wrong group before the onboarding gate resolves.
   const ready = fontsReady && !loading && (!session || !profileLoading);
 
-  useEffect(() => {
-    if (ready) {
-      SplashScreen.hideAsync();
-    }
-  }, [ready]);
+  const hideNativeSplash = useCallback(() => {
+    void SplashScreen.hideAsync();
+  }, []);
 
   useEffect(() => {
     if (!ready) return;
@@ -81,24 +81,40 @@ function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
     }
   }, [ready, session, onboardedAt, segments, router]);
 
-  if (!ready) {
-    return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
-  }
-
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: colors.bg },
-      }}
-    >
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(onboarding)" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="search" />
-      <Stack.Screen name="title/[id]" />
-      <Stack.Screen name="story/[category]" />
-      <Stack.Screen name="invite/[code]" />
-    </Stack>
+    <View style={styles.root}>
+      {ready ? (
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.bg },
+          }}
+        >
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(onboarding)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="search" />
+          <Stack.Screen name="title/[id]" />
+          <Stack.Screen name="story/[category]" />
+          <Stack.Screen name="invite/[code]" />
+        </Stack>
+      ) : null}
+
+      {splashVisible ? (
+        <AnimatedSplash
+          canDismiss={ready}
+          hasSession={!!session}
+          onNativeHide={hideNativeSplash}
+          onFinished={() => setSplashVisible(false)}
+        />
+      ) : null}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+});
