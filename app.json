@@ -8,6 +8,8 @@
     "scheme": "tonight",
     "userInterfaceStyle": "dark",
     "ios": {
+      "bundleIdentifier": "com.codewithmikey.tonight-app",
+      "usesAppleSignIn": true,
       "icon": "./assets/expo.icon",
       "supportsTablet": false,
       "infoPlist": {
@@ -21,9 +23,7 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "permissions": [
-        "READ_CONTACTS"
-      ],
+      "permissions": ["READ_CONTACTS"],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -42,6 +42,7 @@
       ],
       "expo-secure-store",
       "expo-font",
+      "expo-apple-authentication",
       [
         "expo-contacts",
         {
