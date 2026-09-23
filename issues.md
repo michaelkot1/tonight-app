@@ -69,15 +69,34 @@ None required for Phase 2. Consider RPC hardening when wiring handle edits from 
 
 ## ISSUE-003 — Signup fails: "Error sending confirmation email"
 
-- Status: unresolved (owner SMTP config)
-- Location: Supabase Auth → custom SMTP; surfaces on client Create account (`signUpWithEmail`)
-- Problem: After Create account, API returns error sending confirmation email; confirm-code screen never opens.
-- Suspected cause: Custom SMTP credentials are invalid. Auth logs show `535 "Authentication credentials invalid"` on `POST /signup` (`user_confirmation_requested`, status 500). Successful earlier sends used default `noreply@mail.app.supabase.io`; failures started after custom SMTP was enabled.
+- Status: unresolved (owner Supabase template + Resend deliverability config)
+- Location: Supabase Auth → Email Templates + custom SMTP (Resend); surfaces on client Create account (`signUpWithEmail` in `src/providers/auth-provider.tsx`) and confirm-code screen (`src/screens/auth/confirm-email/index.tsx`).
+- Problem: Signup email either never arrives at `kotmichael7@yahoo.com`, or when it does it's the wrong template (invite link, not 6-digit OTP), so the confirm-code screen can't verify it.
+- Suspected cause: Compound issue —
+  1. Custom SMTP credentials were invalid (fixed).
+  2. Only the **Magic Link** template was customized to use `{{ .Token }}`; the app actually triggers the **Confirm signup** template (`supabase.auth.signUp`), which still shipped the default `{{ .ConfirmationURL }}` link.
+  3. Owner was testing via Studio → Authentication → Users → **"Send invitation"** (fires `POST /invite`, uses the **Invite user** template, actor `service_role`, referer `http://localhost:3000`) instead of the app's Create account flow — so the customized templates were never even evaluated.
+  4. Deliverability: sender domain `tonight-app.org` vs link domain `kxvnmwnhiiortqpjzvog.supabase.co` → URL/domain mismatch that Yahoo/Gmail flag; likely missing DMARC record.
 - Attempts:
   - Attempt 1: Queried `auth_logs` for recent signup failures.
     - Result: Confirmed SMTP 535 auth failure (not app/OTP route bug).
-- Current status: SMTP auth fixed (Resend accepts mail). New issue: message appears in Resend but not in Yahoo inbox (`kotmichael7@yahoo.com`) — deliverability / spam filtering, not app code. OTP template content is correct.
-- Next step: In Resend check that email’s status (Delivered / Bounced / Delayed). Check Yahoo Spam/Junk. Confirm SPF + DKIM + DMARC all verified for `tonight-app.org` in Resend. Test delivery to Gmail. App can accept the 6-digit code even if mail is only visible in Resend for now.
+  - Attempt 2: Owner customized "Magic Link / OTP" template to `{{ .Token }}` and re-tested via Studio "Send invitation".
+    - Result: Failed. Auth logs show only `POST /invite` (invite path), never `POST /signup`. Resend log shows subject "You've been invited" + `type=invite` link → **Invite user** template body, not the customized Magic Link body. Wrong template + wrong test entry point.
+- Current status: Diagnosed. App code (`signUpWithEmail` + `verifyEmailOtp`) is correct and expects a 6-digit OTP via `verifyOtp({ type: 'signup' })`. Fix is entirely in Supabase Auth template config + Resend DNS/deliverability, no app code change required.
+- Next step:
+  1. In Supabase → Auth → Email Templates, edit **Confirm signup** (not Magic Link) to use `{{ .Token }}`-only body, e.g.:
+     ```html
+     <h2>Your Tonight code</h2>
+     <p>Enter this 6-digit code in the app to finish signing up:</p>
+     <p style="font-size: 28px; letter-spacing: 6px;"><strong>{{ .Token }}</strong></p>
+     <p>This code expires in 60 minutes and can only be used once.</p>
+     ```
+     Optional subject: `Your Tonight sign-in code: {{ .Token }}`.
+  2. Test from the **mobile app's Create account flow** (should produce `POST /signup` in auth_logs), not from Studio's Invite button.
+  3. In Resend → Emails, verify the actual delivery status pill (Delivered / Bounced / Deferred) for the new message. Then check Yahoo Junk.
+  4. Add DMARC TXT record `_dmarc.tonight-app.org` → `v=DMARC1; p=none; rua=mailto:you@tonight-app.org` if missing. Re-verify SPF + DKIM in Resend.
+  5. Once template is OTP-only, the "Ensure link URLs match sending domain" warning in Resend goes away (no link in body).
+  6. Optional cleanup: drop the now-unused `options: { emailRedirectTo: authRedirectUrl() }` from `signUpWithEmail` — only meaningful when the template contains `{{ .ConfirmationURL }}`. Leave in place until template switch is confirmed working.
 
 ---
 
