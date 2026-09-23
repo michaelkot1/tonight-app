@@ -131,3 +131,52 @@ Shuffle race/exhaustion + edge under-expand after exclude were required for pref
 
 Owner smoke-test: Movie + Comedy + Me + 1 friend → Find → Shuffle distinct pages until hint (~4 OK if pool ~12); New setup → Find again must not return any title shown earlier that Decider session; no silent wrap.
 
+---
+
+## ISSUE-006 — TestFlight sign-in/sign-up fails with Supabase "Invalid API key"
+
+- Status: resolved
+- Location: TestFlight sign-in/sign-up (production EAS build only; Expo Go / dev works)
+- Problem: Supabase `Invalid API key` in production build only; sign-in / sign-up unreachable on TestFlight, works fine locally in Expo Go.
+- Suspected cause: EAS `production` environment variable `EXPO_PUBLIC_SUPABASE_ANON_KEY` had a 1-character typo (`N30` → `N70` in the JWT payload segment), which invalidated the HS256 signature server-side. Same signature bytes, but the payload chunk differed by one char, so Supabase's PostgREST rejected the JWT before any RLS check. Additionally, `preview` and `development` environments had no Supabase vars set at all.
+
+### Attempts
+
+#### Attempt 1
+- Solution: Compared local `.env` (works in Expo Go) against `npx eas-cli env:list --environment production` and found the single-char diff in the JWT payload (`...N70.8xPNuL71...` vs. `...N30.8xPNuL71...`).
+- Result: Succeeded — root cause identified.
+
+#### Attempt 2
+- Solution: Deleted the typo'd `EXPO_PUBLIC_SUPABASE_ANON_KEY` from EAS `production` and recreated it (`eas env:create`, `--visibility plaintext`, `--non-interactive`) with the exact value from local `.env`. Created both `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `preview` and `development` (previously empty). Verified all three environments now share the same trailing key segment (`...N30.8xPNuL71Ym2vESrN4FHCpa1eCbLEFYyC2s2N5NoQUXE`).
+- Result: Succeeded.
+
+#### Attempt 3
+- Solution: Tried to reship the JS bundle to existing TestFlight installs via `npx eas-cli update --branch production` so the corrected anon key would be inlined by Metro without a native rebuild.
+- Result: **Blocked / not attempted.** Project is not configured for EAS Update: `expo-updates` is not in `package.json` dependencies, `app.json` has no `expo.updates` block and no `runtimeVersion`, `eas.json` build profiles don't declare a `channel`, and `eas channel:list` + `eas branch:list` both return empty. Per task guardrails, did NOT run `expo install expo-updates` or otherwise reconfigure — deferred to parent.
+
+#### Attempt 4
+- Solution: Added a startup guard in `src/lib/env.ts` (`validateAnonKey`) that decodes the JWT payload (base64url → JSON) and `console.warn`s on a malformed shape (wrong segment count, non-JSON payload, missing/incorrect `role`) or `console.error`s if a `service_role` key is ever pasted client-side. Wrapped in try/catch, no throw.
+- Result: Succeeded — typechecks clean. Next regression will surface as a clear first-line Metro warning naming the exact var, instead of a downstream "Invalid API key" from PostgREST.
+
+#### Attempt 5
+- Solution: Wired up EAS Update end-to-end so future JS-only regressions (like this typo) can be reshipped without a store submission, then kicked off a new production iOS build with `--auto-submit` to TestFlight so the corrected anon key ships as a fresh native bundle. Concretely:
+  1. Installed `expo-updates@~57.0.23` (SDK 57-aligned) via `npx expo install expo-updates`.
+  2. Ran `npx eas-cli@latest update:configure --platform all --non-interactive`, which added `expo.updates.url = "https://u.expo.dev/1ae0ee8b-5555-4f6a-878a-5575af4c4368"` and `expo.runtimeVersion = { "policy": "appVersion" }` to `app.json`, and added `"channel": "<name>"` to each build profile in `eas.json`.
+  3. Added explicit `"environment": "development" | "preview" | "production"` to each build profile in `eas.json` so EAS env-var inlining is unambiguous per profile.
+  4. Ran `npx eas-cli@latest channel:create {development,preview,production}` — all three channels + matching branches now exist on the server (previously `channel:list` was empty).
+  5. Cleaned up an unintended side-effect: `eas update:configure` re-serialized `app.json` and duplicated the three Android permissions; re-collapsed to a single copy.
+  6. `npx tsc --noEmit` clean; `channel:list --json` shows `development`, `preview`, `production`.
+  7. Kicked off `npx eas-cli@latest build --platform ios --profile production --non-interactive --auto-submit` — see build URL in the parent report. `autoIncrement: true` on the production profile handled the build number bump; no manual version change needed. The resulting IPA will embed the corrected `EXPO_PUBLIC_SUPABASE_ANON_KEY` (already fixed in the `production` EAS environment in Attempt 2) *and* embed `expo-updates` so future JS-only fixes can be published via `eas update --channel production` without another store submission.
+- Result: Succeeded (config + build submission). Full fix is **pending TestFlight rebuild landing + owner smoke-test** on the new build.
+- Note (2026-09-23): Production iOS build queued at https://expo.dev/accounts/kotmichael/projects/tonight/builds/d7001f7f-b313-44b4-ba22-52eb5125ea60 (UUID `d7001f7f-b313-44b4-ba22-52eb5125ea60`, buildNumber 3, status `IN_QUEUE`). `--auto-submit` was rejected: `Set ascAppId in the submit profile (eas.json) or re-run this command in interactive mode.` The build itself was not cancelled.
+- Note (2026-09-23): `ascAppId` `6813179570` came from the Sep 17 submission (`npx eas-cli@latest submit:list`, `iosConfig.ascAppIdentifier` on build `2339457a-d63a-46c5-83c7-b10f68ded44b`). Written to `eas.json` `submit.production.ios` only (no preview submit profile). Build `d7001f7f` reached `FINISHED` (buildNumber 3). Submit succeeded: https://expo.dev/accounts/kotmichael/projects/tonight/submissions/ff83f895-4e09-4662-8bc4-74b1586cc467. Apple is processing the binary; TestFlight: https://appstoreconnect.apple.com/apps/6813179570/testflight/ios
+
+### Current Understanding
+
+Root cause was a single-char typo in the EAS `production` anon key value; env is now correct across all three EAS environments and locally. Because EAS Update is now wired up (Attempt 5), any future JS-only regression can be reshipped to installed builds via `eas update --channel production` instead of a full TestFlight resubmission — the current fix still requires one native build because the previously-installed TestFlight IPA does not contain `expo-updates` (nothing to receive an OTA).
+
+### Next Step
+
+1. After Apple finishes processing build 3, owner installs it from TestFlight and re-attempts sign-in / sign-up. Submission: https://expo.dev/accounts/kotmichael/projects/tonight/submissions/ff83f895-4e09-4662-8bc4-74b1586cc467
+2. After that build lands, all future JS-only fixes ship via `npx eas-cli@latest update --channel production --message "..." --environment production` (see `.agents/skills/eas-update/SKILL.md`).
+
