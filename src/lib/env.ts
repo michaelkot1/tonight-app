@@ -44,6 +44,33 @@ export const env: PublicEnv = {
   googleWebClientId: trimEnv(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID),
 };
 
+/**
+ * Fail-loud guard: if the anon key is present but not a well-formed anon JWT,
+ * warn at bundle load so the first Metro log line names the real problem
+ * ("Invalid API key" from PostgREST is otherwise very misleading).
+ * Pure, no throw — a decode failure must never crash the app.
+ */
+function validateAnonKey(key: string | undefined): void {
+  if (!key) return;
+  const malformed = '[env] EXPO_PUBLIC_SUPABASE_ANON_KEY appears malformed — sign-in will fail with "Invalid API key"';
+  try {
+    const parts = key.split('.');
+    if (parts.length !== 3) return console.warn(malformed);
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded)) as { role?: string };
+    if (payload.role === 'service_role') {
+      console.error('[env] EXPO_PUBLIC_SUPABASE_ANON_KEY is a service_role JWT — this must NEVER ship to the client. Replace with the anon key immediately.');
+    } else if (payload.role !== 'anon') {
+      console.warn(malformed);
+    }
+  } catch {
+    console.warn(malformed);
+  }
+}
+
+validateAnonKey(env.supabaseAnonKey);
+
 export function hasSupabaseEnv(): boolean {
   return Boolean(env.supabaseUrl && env.supabaseAnonKey);
 }
