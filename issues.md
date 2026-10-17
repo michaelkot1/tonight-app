@@ -180,3 +180,21 @@ Root cause was a single-char typo in the EAS `production` anon key value; env is
 1. After Apple finishes processing build 3, owner installs it from TestFlight and re-attempts sign-in / sign-up. Submission: https://expo.dev/accounts/kotmichael/projects/tonight/submissions/ff83f895-4e09-4662-8bc4-74b1586cc467
 2. After that build lands, all future JS-only fixes ship via `npx eas-cli@latest update --channel production --message "..." --environment production` (see `.agents/skills/eas-update/SKILL.md`).
 
+---
+
+## ISSUE-007 — TestFlight cold start stuck on splash for 20–30s before auth screen
+
+- Status: resolved in code (pending OTA/TestFlight smoke-test)
+- Location: `src/providers/auth-provider.tsx` (initial `getSession()` effect) → `loading` gates `ready` in `src/app/_layout.tsx`, which holds `AnimatedSplash`.
+- Problem: Opening the TestFlight build sat on the splash ~20–30s, then landed on sign-in/sign-up.
+- Suspected cause: Supabase project `kxvnmwnhiiortqpjzvog` was **paused** (free tier, inactivity). API Gateway logs at 2026-10-17 16:03 show `/auth/v1/health` 502 and `/rest-admin/v1/ready` 521. On launch, auth-js `getSession()` awaits `_recoverAndRefresh()`; a stale/expired session in SecureStore (Keychain survives app deletion) triggers `_refreshAccessToken()`, which retries 5xx/network errors with backoff 200ms…12.8s until the 30s tick ceiling (~25s total), then drops the session → auth screen. The splash had no timeout on this wait, and `getSession()` had no `.catch` (a rejection would hang the splash forever).
+- Attempts:
+  - Attempt 1: Read Supabase API Gateway logs around launch.
+    - Result: Succeeded — confirmed 502/521 health failures while paused; after restore (16:11) a single `POST /auth/v1/token` returned 200 instantly.
+  - Attempt 2: Cap the initial session wait at `SESSION_RESTORE_TIMEOUT_MS` (3s) in `AuthProvider`; add `.catch` + `.finally` so `loading` always clears. A late-resolving session still sets state (and `onAuthStateChange` fires), so the root guard re-routes to onboarding/tabs.
+    - Result: Succeeded in code (typecheck/lint). Needs device confirmation.
+- Current status: resolved in code; infra cause (pausing) still possible on free tier.
+- Next step:
+  1. Ship via `eas update --channel production` (build 3+ has `expo-updates`; takes two cold starts to apply) and confirm cold start ≤ ~3s with the project paused or healthy.
+  2. Prevent pausing: upgrade to Pro, or add a scheduled keep-alive that makes a real REST query (e.g. `GET /rest/v1/titles?select=id&limit=1` with the anon key), not just `/auth/v1/health`.
+
