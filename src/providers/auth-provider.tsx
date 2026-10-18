@@ -42,7 +42,7 @@ interface SignUpResult extends AuthResult {
 interface AuthContextValue {
   /** False when Supabase env is missing — screens should surface a disabled state. */
   isConfigured: boolean;
-  /** True until the initial getSession() resolves. */
+  /** True until the initial getSession() resolves or SESSION_RESTORE_TIMEOUT_MS elapses. */
   loading: boolean;
   session: Session | null;
   user: User | null;
@@ -72,6 +72,9 @@ function authRedirectUrl(): string {
   return Linking.createURL('/');
 }
 
+/** Max splash wait on initial session restore before routing without a session. */
+const SESSION_RESTORE_TIMEOUT_MS = 3000;
+
 const NOT_CONFIGURED_ERROR =
   'Sign-in is unavailable — Supabase environment is not configured.';
 
@@ -91,11 +94,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      setLoading(false);
-    });
+    const finishLoading = () => {
+      if (mounted) setLoading(false);
+    };
+    // getSession() awaits a token refresh that auth-js retries for up to ~25s on
+    // 5xx/network errors (e.g. a paused project). Release the splash early; a
+    // late session still lands here or via onAuthStateChange.
+    const loadingTimeout = setTimeout(finishLoading, SESSION_RESTORE_TIMEOUT_MS);
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (mounted) setSession(data.session);
+      })
+      .catch(() => {})
+      .finally(() => {
+        clearTimeout(loadingTimeout);
+        finishLoading();
+      });
 
     const {
       data: { subscription },
@@ -110,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mounted = false;
+      clearTimeout(loadingTimeout);
       subscription.unsubscribe();
     };
   }, [supabase, queryClient]);
